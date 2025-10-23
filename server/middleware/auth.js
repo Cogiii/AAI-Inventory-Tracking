@@ -1,7 +1,5 @@
 const jwt = require('jsonwebtoken');
-
-// Mock user store (replace with database later)
-const mockUsers = [];
+const UserService = require('../services/UserService');
 
 const auth = async (req, res, next) => {
   try {
@@ -16,9 +14,8 @@ const auth = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    // In a real application, you would fetch the user from the database
-    // For now, we'll use a mock approach
-    const user = mockUsers.find(u => u.id === decoded.id);
+    // Fetch user from database
+    const user = await UserService.findById(decoded.id);
     
     if (!user) {
       return res.status(401).json({
@@ -31,7 +28,9 @@ const auth = async (req, res, next) => {
       id: user.id,
       email: user.email,
       role: user.role,
-      name: user.name
+      name: `${user.first_name} ${user.last_name}`,
+      firstName: user.first_name,
+      lastName: user.last_name
     };
     
     next();
@@ -82,5 +81,4 @@ const authorize = (...roles) => {
   };
 };
 
-// Export mock users for use in auth routes (temporary)
-module.exports = { auth, authorize, mockUsers };
+module.exports = { auth, authorize };

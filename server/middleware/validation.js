@@ -49,9 +49,8 @@ const schemas = {
   }),
 
   loginUser: Joi.object({
-    email: Joi.string().email().required().messages({
-      'string.email': 'Please provide a valid email address',
-      'any.required': 'Email is required'
+    username: Joi.string().required().messages({
+      'any.required': 'Username is required'
     }),
     password: Joi.string().required().messages({
       'any.required': 'Password is required'

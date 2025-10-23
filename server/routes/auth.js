@@ -1,9 +1,9 @@
 const express = require('express');
-const { v4: uuidv4 } = require('uuid');
 const { hashPassword, comparePassword } = require('../utils/password');
 const { generateToken } = require('../utils/jwt');
-const { auth, mockUsers } = require('../middleware/auth');
+const { auth, authorize } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
+const UserService = require('../services/UserService');
 
 const router = express.Router();
 
@@ -14,32 +14,40 @@ router.post('/register', validate(schemas.registerUser), async (req, res) => {
   try {
     const { name, email, password, role = 'user' } = req.body;
 
+    // Split name into first and last name
+    const nameParts = name.split(' ');
+    const firstName = nameParts[0];
+    const lastName = nameParts.slice(1).join(' ') || firstName;
+
+    // Generate username from email (you can modify this logic)
+    const username = email.split('@')[0];
+
     // Check if user already exists
-    const existingUser = mockUsers.find(user => user.email === email);
-    if (existingUser) {
+    const existingUserByEmail = await UserService.findByEmail(email);
+    if (existingUserByEmail) {
       return res.status(400).json({
         success: false,
         error: 'User with this email already exists'
       });
     }
 
-    // Hash password
-    const hashedPassword = await hashPassword(password);
+    const existingUserByUsername = await UserService.findByUsername(username);
+    if (existingUserByUsername) {
+      return res.status(400).json({
+        success: false,
+        error: 'Username already taken'
+      });
+    }
 
     // Create new user
-    const newUser = {
-      id: uuidv4(),
-      name,
+    const newUser = await UserService.create({
+      firstName,
+      lastName,
       email,
-      password: hashedPassword,
+      password,
       role,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      isActive: true
-    };
-
-    // Add user to mock store
-    mockUsers.push(newUser);
+      username
+    });
 
     // Generate JWT token
     const token = generateToken({
@@ -74,14 +82,14 @@ router.post('/register', validate(schemas.registerUser), async (req, res) => {
 // @access  Public
 router.post('/login', validate(schemas.loginUser), async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { username, password } = req.body;
 
-    // Find user by email
-    const user = mockUsers.find(u => u.email === email);
+    // Find user by username
+    const user = await UserService.findByUsername(username);
     if (!user) {
       return res.status(401).json({
         success: false,
-        error: 'Invalid email or password'
+        error: 'Invalid username or password'
       });
     }
 
@@ -94,16 +102,16 @@ router.post('/login', validate(schemas.loginUser), async (req, res) => {
     }
 
     // Verify password
-    const isMatch = await comparePassword(password, user.password);
+    const isMatch = await comparePassword(password, user.password_hash || user.password);
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        error: 'Invalid email or password'
+        error: 'Invalid username or password'
       });
     }
 
     // Update last login
-    user.lastLogin = new Date().toISOString();
+    await UserService.update(user.id, { lastLogin: new Date() });
 
     // Generate JWT token
     const token = generateToken({
@@ -138,7 +146,7 @@ router.post('/login', validate(schemas.loginUser), async (req, res) => {
 // @access  Private
 router.get('/me', auth, async (req, res) => {
   try {
-    const user = mockUsers.find(u => u.id === req.user.id);
+    const user = await UserService.findById(req.user.id);
     
     if (!user) {
       return res.status(404).json({
@@ -173,8 +181,8 @@ router.put('/me', auth, validate(schemas.updateUser), async (req, res) => {
   try {
     const { name, email } = req.body;
     
-    const userIndex = mockUsers.findIndex(u => u.id === req.user.id);
-    if (userIndex === -1) {
+    const user = await UserService.findById(req.user.id);
+    if (!user) {
       return res.status(404).json({
         success: false,
         error: 'User not found'
@@ -182,8 +190,8 @@ router.put('/me', auth, validate(schemas.updateUser), async (req, res) => {
     }
 
     // Check if email is being changed and if it already exists
-    if (email && email !== mockUsers[userIndex].email) {
-      const existingUser = mockUsers.find(u => u.email === email && u.id !== req.user.id);
+    if (email && email !== user.email) {
+      const existingUser = await UserService.findByEmail(email);
       if (existingUser) {
         return res.status(400).json({
           success: false,
@@ -192,15 +200,19 @@ router.put('/me', auth, validate(schemas.updateUser), async (req, res) => {
       }
     }
 
-    // Update user
-    const updatedUser = {
-      ...mockUsers[userIndex],
-      ...(name && { name }),
-      ...(email && { email }),
-      updatedAt: new Date().toISOString()
-    };
+    // Split name into first and last name if provided
+    const updateData = {};
+    if (name) {
+      const nameParts = name.split(' ');
+      updateData.firstName = nameParts[0];
+      updateData.lastName = nameParts.slice(1).join(' ') || nameParts[0];
+    }
+    if (email) {
+      updateData.email = email;
+    }
 
-    mockUsers[userIndex] = updatedUser;
+    // Update user
+    const updatedUser = await UserService.update(req.user.id, updateData);
 
     // Remove password from response
     const { password: _, ...userResponse } = updatedUser;
@@ -239,32 +251,42 @@ router.post('/logout', auth, (req, res) => {
 // @route   GET /api/auth/stats
 // @desc    Get authentication statistics (admin only)
 // @access  Private (Admin)
-const { authorize } = require('../middleware/auth');
+router.get('/stats', auth, authorize('admin'), async (req, res) => {
+  try {
+    const allUsers = await UserService.findAll();
+    
+    const totalUsers = allUsers.length;
+    const activeUsers = allUsers.filter(u => u.isActive).length;
+    const adminUsers = allUsers.filter(u => u.role === 'admin').length;
+    const managerUsers = allUsers.filter(u => u.role === 'manager').length;
+    const staffUsers = allUsers.filter(u => u.role === 'staff').length;
 
-router.get('/stats', auth, authorize('admin'), (req, res) => {
-  const totalUsers = mockUsers.length;
-  const activeUsers = mockUsers.filter(u => u.isActive).length;
-  const adminUsers = mockUsers.filter(u => u.role === 'admin').length;
-  const managerUsers = mockUsers.filter(u => u.role === 'manager').length;
-  const regularUsers = mockUsers.filter(u => u.role === 'user').length;
+    const today = new Date().toDateString();
+    const registeredToday = allUsers.filter(u => {
+      const userDate = new Date(u.createdAt).toDateString();
+      return today === userDate;
+    }).length;
 
-  res.json({
-    success: true,
-    data: {
-      totalUsers,
-      activeUsers,
-      usersByRole: {
-        admin: adminUsers,
-        manager: managerUsers,
-        user: regularUsers
-      },
-      registeredToday: mockUsers.filter(u => {
-        const today = new Date().toDateString();
-        const userDate = new Date(u.createdAt).toDateString();
-        return today === userDate;
-      }).length
-    }
-  });
+    res.json({
+      success: true,
+      data: {
+        totalUsers,
+        activeUsers,
+        usersByRole: {
+          admin: adminUsers,
+          manager: managerUsers,
+          staff: staffUsers
+        },
+        registeredToday
+      }
+    });
+  } catch (error) {
+    console.error('Get stats error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error getting statistics'
+    });
+  }
 });
 
 module.exports = router;

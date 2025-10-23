@@ -7,6 +7,9 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 
+// Import database connection
+const { testConnection } = require('./config/database');
+
 // Import middleware
 const errorHandler = require('./middleware/errorHandler');
 const notFound = require('./middleware/notFound');
@@ -23,8 +26,8 @@ app.set('trust proxy', 1);
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 1 * 60 * 1000,
+  max: 200, 
   message: {
     error: 'Too many requests from this IP, please try again later.'
   }
@@ -84,14 +87,30 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`==================================================`);
-  console.log(`\tInventory Tracking System Server`);
-  console.log(`==================================================`);
-  console.log(`Server is running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`Server: http://localhost:${PORT}`);
-  console.log(`API Base URL: http://localhost:${PORT}/api`);
-});
+// Initialize database connection
+const startServer = async () => {
+  try {
+    // Test database connection
+    await testConnection();
+    
+    app.listen(PORT, () => {
+      console.log(`==================================================`);
+      console.log(`\tInventory Tracking System Server`);
+      console.log(`==================================================`);
+      console.log(`Server is running on port ${PORT}`);
+      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`Server: http://localhost:${PORT}`);
+      console.log(`API Base URL: http://localhost:${PORT}/api`);
+      console.log(`==================================================`);
+      console.log(`READING LOGS...`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+// Start the server
+startServer();
 
 module.exports = app;
