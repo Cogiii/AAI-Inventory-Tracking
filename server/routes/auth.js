@@ -94,7 +94,7 @@ router.post('/login', validate(schemas.loginUser), async (req, res) => {
     }
 
     // Check if user is active
-    if (!user.isActive) {
+    if (!user.is_active) {
       return res.status(401).json({
         success: false,
         error: 'Account is deactivated. Please contact administrator.'
@@ -256,7 +256,7 @@ router.get('/stats', auth, authorize('admin'), async (req, res) => {
     const allUsers = await UserService.findAll();
     
     const totalUsers = allUsers.length;
-    const activeUsers = allUsers.filter(u => u.isActive).length;
+    const activeUsers = allUsers.filter(u => u.is_active).length;
     const adminUsers = allUsers.filter(u => u.role === 'admin').length;
     const managerUsers = allUsers.filter(u => u.role === 'manager').length;
     const staffUsers = allUsers.filter(u => u.role === 'staff').length;

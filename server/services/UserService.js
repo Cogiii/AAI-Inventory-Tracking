@@ -2,95 +2,114 @@ const { query, queryOne } = require('../config/database');
 const { hashPassword } = require('../utils/password');
 
 class UserService {
-  // Find user by email
+  // Helper method to transform user data
+  static transformUser(user) {
+    if (!user) return null;
+    // Keep is_active as is from database (no camelCase conversion)
+    return user;
+  }
+
+  // Transform array of users
+  static transformUsers(users) {
+    if (!users) return [];
+    return users.map(user => this.transformUser(user));
+  }
+
   static async findByEmail(email) {
     try {
       const sql = `
-        SELECT id, first_name, last_name, email, position as role, 
-               username, password_hash as password, created_at, updated_at
-        FROM user 
-        WHERE email = ? 
+        SELECT u.id, u.first_name, u.last_name, u.email, 
+               COALESCE(p.name, 'No Position') as role, 
+               u.username, u.password_hash as password, u.is_active, 
+               u.created_at, u.updated_at
+        FROM user u
+        LEFT JOIN position p ON u.position_id = p.id
+        WHERE u.email = ? 
         LIMIT 1
       `;
       const user = await queryOne(sql, [email]);
-      if (user) {
-        user.isActive = true; // Set default for compatibility
-        user.firstName = user.first_name;
-        user.lastName = user.last_name;
-      }
-      return user;
+
+      return this.transformUser(user);
     } catch (error) {
       console.error('Error finding user by email:', error);
       throw error;
     }
   }
 
-  // Find user by ID
   static async findById(id) {
     try {
       const sql = `
-        SELECT id, first_name, last_name, email, position as role, 
-               username, created_at, updated_at
-        FROM user 
-        WHERE id = ? 
+        SELECT u.id, u.first_name, u.last_name, u.email, 
+               COALESCE(p.name, 'No Position') as role, 
+               u.username, u.is_active, u.created_at, u.updated_at
+        FROM user u
+        LEFT JOIN position p ON u.position_id = p.id
+        WHERE u.id = ? 
         LIMIT 1
       `;
       const user = await queryOne(sql, [id]);
-      if (user) {
-        user.isActive = true;
-        user.firstName = user.first_name;
-        user.lastName = user.last_name;
-      }
-      return user;
+
+      return this.transformUser(user);
     } catch (error) {
       console.error('Error finding user by ID:', error);
       throw error;
     }
   }
 
-  // Find user by username
   static async findByUsername(username) {
     try {
       const sql = `
-        SELECT id, first_name, last_name, email, position as role, 
-               username, password_hash as password, created_at, updated_at
-        FROM user 
-        WHERE username = ? 
+        SELECT u.id, u.first_name, u.last_name, u.email, 
+               COALESCE(p.name, 'No Position') as role, 
+               u.username, u.password_hash as password, u.is_active, 
+               u.created_at, u.updated_at
+        FROM user u
+        LEFT JOIN position p ON u.position_id = p.id
+        WHERE u.username = ? 
         LIMIT 1
       `;
       const user = await queryOne(sql, [username]);
-      if (user) {
-        user.isActive = true;
-        user.firstName = user.first_name;
-        user.lastName = user.last_name;
-      }
-      return user;
+
+      return this.transformUser(user);
     } catch (error) {
       console.error('Error finding user by username:', error);
       throw error;
     }
   }
 
-  // Create new user
   static async create(userData) {
     try {
-      const { firstName, lastName, email, password, role = 'staff', username } = userData;
+      const { firstName, lastName, email, password, role = 'staff', username, is_active = true, position_id } = userData;
       
       // Hash password
       const hashedPassword = await hashPassword(password);
       
+      // If position_id is not provided but role is, try to find position by name
+      let finalPositionId = position_id;
+      if (!finalPositionId && role && role !== 'staff') {
+        try {
+          const positionResult = await queryOne('SELECT id FROM position WHERE name = ? LIMIT 1', [role]);
+          if (positionResult) {
+            finalPositionId = positionResult.id;
+          }
+        } catch (positionError) {
+          console.warn('Could not find position by role name:', role);
+        }
+      }
+      
       const sql = `
-        INSERT INTO user (first_name, last_name, email, position, username, password_hash)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO user (first_name, last_name, email, position_id, username, password_hash, is_active)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `;
       
       const result = await query(sql, [
         firstName,
         lastName,
         email,
-        role,
+        finalPositionId,
         username,
-        hashedPassword
+        hashedPassword,
+        is_active
       ]);
 
       // Return the created user (without password)
@@ -101,7 +120,6 @@ class UserService {
     }
   }
 
-  // Update user
   static async update(id, updateData) {
     try {
       // Build dynamic update query
@@ -120,9 +138,22 @@ class UserService {
         updateFields.push('email = ?');
         values.push(updateData.email);
       }
-      if (updateData.role) {
-        updateFields.push('position = ?');
-        values.push(updateData.role);
+      if (updateData.role || updateData.position_id) {
+        if (updateData.position_id) {
+          updateFields.push('position_id = ?');
+          values.push(updateData.position_id);
+        } else if (updateData.role) {
+          // Try to find position by name if role is provided
+          try {
+            const positionResult = await queryOne('SELECT id FROM position WHERE name = ? LIMIT 1', [updateData.role]);
+            if (positionResult) {
+              updateFields.push('position_id = ?');
+              values.push(positionResult.id);
+            }
+          } catch (positionError) {
+            console.warn('Could not find position by role name:', updateData.role);
+          }
+        }
       }
       if (updateData.password) {
         const hashedPassword = await hashPassword(updateData.password);
@@ -132,6 +163,10 @@ class UserService {
       if (updateData.lastLogin) {
         updateFields.push('updated_at = ?');
         values.push(updateData.lastLogin);
+      }
+      if (updateData.is_active !== undefined) {
+        updateFields.push('is_active = ?');
+        values.push(updateData.is_active);
       }
       
       updateFields.push('updated_at = NOW()');
@@ -155,7 +190,6 @@ class UserService {
     }
   }
 
-  // Update password
   static async updatePassword(id, newPassword) {
     try {
       const hashedPassword = await hashPassword(newPassword);
@@ -174,35 +208,29 @@ class UserService {
     }
   }
 
-  // Get all users (for admin)
   static async findAll(limit = 50, offset = 0) {
     try {
       const sql = `
-        SELECT id, first_name, last_name, email, position as role, 
-               username, created_at, updated_at
-        FROM user 
-        ORDER BY created_at DESC
+        SELECT u.id, u.first_name, u.last_name, u.email, 
+               COALESCE(p.name, 'No Position') as role, 
+               u.username, u.is_active, u.created_at, u.updated_at
+        FROM user u
+        LEFT JOIN position p ON u.position_id = p.id
+        ORDER BY u.created_at DESC
         LIMIT ? OFFSET ?
       `;
       const users = await query(sql, [limit, offset]);
-      return users.map(user => ({
-        ...user,
-        isActive: true,
-        firstName: user.first_name,
-        lastName: user.last_name
-      }));
+      return this.transformUsers(users);
     } catch (error) {
       console.error('Error getting all users:', error);
       throw error;
     }
   }
 
-  // Get all users (alias for compatibility)
   static async getAllUsers(limit = 50, offset = 0) {
     return this.findAll(limit, offset);
   }
 
-  // Get user count
   static async getUserCount() {
     try {
       const sql = 'SELECT COUNT(*) as count FROM user';
@@ -214,7 +242,6 @@ class UserService {
     }
   }
 
-  // Delete user (soft delete by deactivating)
   static async deleteUser(id) {
     try {
       // In a real scenario, you might want to soft delete
@@ -228,7 +255,6 @@ class UserService {
     }
   }
 
-  // Check if email exists
   static async emailExists(email, excludeId = null) {
     try {
       let sql = 'SELECT id FROM user WHERE email = ?';
@@ -247,7 +273,6 @@ class UserService {
     }
   }
 
-  // Check if username exists
   static async usernameExists(username, excludeId = null) {
     try {
       let sql = 'SELECT id FROM user WHERE username = ?';
@@ -262,6 +287,28 @@ class UserService {
       return !!result;
     } catch (error) {
       console.error('Error checking username existence:', error);
+      throw error;
+    }
+  }
+
+  static async getAllPositions() {
+    try {
+      const sql = 'SELECT id, name, created_at, updated_at FROM position ORDER BY name ASC';
+      const positions = await query(sql);
+      return positions;
+    } catch (error) {
+      console.error('Error getting all positions:', error);
+      throw error;
+    }
+  }
+
+  static async getPositionById(id) {
+    try {
+      const sql = 'SELECT id, name, created_at, updated_at FROM position WHERE id = ? LIMIT 1';
+      const position = await queryOne(sql, [id]);
+      return position;
+    } catch (error) {
+      console.error('Error getting position by ID:', error);
       throw error;
     }
   }

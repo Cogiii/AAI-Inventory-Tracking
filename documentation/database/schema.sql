@@ -24,6 +24,13 @@ CREATE TABLE brand (
     updated_at TIMESTAMP DEFAULT NULL ON UPDATE NOW()
 );
 
+CREATE TABLE `position` (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NULL ON UPDATE NOW()
+);
+
 CREATE TABLE user (
     id SERIAL PRIMARY KEY,
     first_name VARCHAR(100) NOT NULL,
@@ -31,10 +38,12 @@ CREATE TABLE user (
     email VARCHAR(255) UNIQUE NOT NULL,
     username VARCHAR(100) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    position VARCHAR(50) NOT NULL, -- admin, marketing_manager, staff
+    position_id INT REFERENCES `position`(id) ON DELETE SET NULL,
+    is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NULL ON UPDATE NOW()
 );
+
 
 CREATE TABLE role (
     id SERIAL PRIMARY KEY,

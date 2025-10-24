@@ -18,6 +18,7 @@ const notFound = require('./middleware/notFound');
 const authRoutes = require('./routes/auth');
 const inventoryRoutes = require('./routes/inventory');
 const userRoutes = require('./routes/users');
+const positionRoutes = require('./routes/positions');
 
 const app = express();
 
@@ -66,6 +67,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/positions', positionRoutes);
 
 // Welcome route
 app.get('/', (req, res) => {
@@ -76,7 +78,8 @@ app.get('/', (req, res) => {
       health: '/api/health',
       auth: '/api/auth',
       inventory: '/api/inventory',
-      users: '/api/users'
+      users: '/api/users',
+      positions: '/api/positions'
     }
   });
 });

@@ -285,7 +285,7 @@ router.put('/:id/deactivate', auth, authorize('admin'), async (req, res) => {
     // Deactivate user
     mockUsers[userIndex] = {
       ...mockUsers[userIndex],
-      isActive: false,
+      is_active: false,
       updatedAt: new Date().toISOString()
     };
 
@@ -326,7 +326,7 @@ router.put('/:id/activate', auth, authorize('admin'), async (req, res) => {
     // Activate user
     mockUsers[userIndex] = {
       ...mockUsers[userIndex],
-      isActive: true,
+      is_active: true,
       updatedAt: new Date().toISOString()
     };
 

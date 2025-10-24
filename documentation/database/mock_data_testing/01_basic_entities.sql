@@ -24,10 +24,15 @@ INSERT INTO brand (name, description) VALUES
 -- ====================
 -- 2. USERS
 -- ====================
-INSERT INTO user (first_name, last_name, email, position, username, password_hash) VALUES
-('Admin', 'User', 'admin@aai.com', 'admin', 'admin', '$2a$12$QkHW.pBh9lZ/QOKMQInWqePEU0goKaVyavYukGzE8Ib09h4xSiAwS'), -- Password: Password123
-('Maria', 'Santos', 'manager@aai.com', 'marketing_manager', 'msantos', '$2a$12$QkHW.pBh9lZ/QOKMQInWqePEU0goKaVyavYukGzE8Ib09h4xSiAwS'), -- Password: Password123
-('John', 'Cruz', 'user@aai.com', 'staff', 'jcruz', '$2a$12$QkHW.pBh9lZ/QOKMQInWqePEU0goKaVyavYukGzE8Ib09h4xSiAwS'), -- Password: Password123
+INSERT INTO position (name) VALUES
+('Administrator'),
+('Marketing Manager'),
+('Staff Member');
+
+INSERT INTO user (first_name, last_name, email, position_id, username, password_hash) VALUES
+('Admin', 'User', 'admin@aai.com', 1, 'admin', '$2a$12$QkHW.pBh9lZ/QOKMQInWqePEU0goKaVyavYukGzE8Ib09h4xSiAwS'), -- Password: Password123
+('Maria', 'Santos', 'manager@aai.com', 2, 'msantos', '$2a$12$QkHW.pBh9lZ/QOKMQInWqePEU0goKaVyavYukGzE8Ib09h4xSiAwS'), -- Password: Password123
+('John', 'Cruz', 'user@aai.com', 3, 'jcruz', '$2a$12$QkHW.pBh9lZ/QOKMQInWqePEU0goKaVyavYukGzE8Ib09h4xSiAwS'), -- Password: Password123
 
 -- ====================
 -- 3. ROLES

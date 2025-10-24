@@ -1,5 +1,6 @@
 import { api } from '../api';
 import type { ApiResponse } from '../api';
+import type { User, LoginCredentials, AuthResponse } from '../../types';
 import { 
   setSecureToken, 
   getSecureToken, 
@@ -8,37 +9,40 @@ import {
   getSecureUserData
 } from '../../utils/tokenSecurity';
 
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: 'admin' | 'manager' | 'user';
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-  lastLogin?: string;
-}
+/**
+ * Transform API user data to our User interface format
+ * @param apiUser - User data from API (with first_name/last_name)
+ * @returns User - Transformed user data (clean, no extra fields)
+ */
+const transformApiUser = (apiUser: any): User => {
+  const {
+    id,
+    email,
+    role,
+    username,
+    created_at,
+    updated_at,
+    is_active,
+    first_name,
+    last_name,
+    name,
+    lastLogin
+  } = apiUser;
 
-export interface AuthResponse {
-  success: boolean;
-  message: string;
-  data: {
-    user: User;
-    token: string;
+  return {
+    id,
+    email,
+    role,
+    username,
+    created_at,
+    updated_at,
+    is_active,
+    first_name,
+    last_name,
+    name,
+    lastLogin
   };
-}
-
-export interface LoginCredentials {
-  username: string;
-  password: string;
-}
-
-export interface RegisterData {
-  name: string;
-  email: string;
-  password: string;
-  role?: 'user' | 'manager' | 'admin';
-}
+};
 
 /**
  * Authentication API Service
@@ -60,8 +64,9 @@ export const AuthService = {
         // Store encrypted token
         setSecureToken(response.data.data.token);
         
-        // Store encrypted user data instead of plain JSON
-        setSecureUserData(response.data.data.user);
+        // Transform and store encrypted user data
+        const transformedUser = transformApiUser(response.data.data.user);
+        setSecureUserData(transformedUser);
       }
       
       return response.data;
@@ -88,8 +93,9 @@ export const AuthService = {
       const response = await api.get<ApiResponse<{ user: User }>>('/auth/me', config);
       
       if (response.data.success && response.data.data.user) {
-        // Token is valid, update stored user data
-        setSecureUserData(response.data.data.user);
+        // Token is valid, transform and update stored user data
+        const transformedUser = transformApiUser(response.data.data.user);
+        setSecureUserData(transformedUser);
         return true;
       }
       
@@ -121,7 +127,8 @@ export const AuthService = {
       
       // Update stored user data if successful (encrypted)
       if (response.data.success && response.data.data.user) {
-        setSecureUserData(response.data.data.user);
+        const transformedUser = transformApiUser(response.data.data.user);
+        setSecureUserData(transformedUser);
       }
       
       return response.data;
@@ -148,7 +155,8 @@ export const AuthService = {
       
       // Update stored user data if successful (encrypted)
       if (response.data.success && response.data.data.user) {
-        setSecureUserData(response.data.data.user);
+        const transformedUser = transformApiUser(response.data.data.user);
+        setSecureUserData(transformedUser);
       }
       
       return response.data;
@@ -231,7 +239,8 @@ export const AuthService = {
         setSecureToken(response.data.data.token);
         
         if (response.data.data.user) {
-          setSecureUserData(response.data.data.user);
+          const transformedUser = transformApiUser(response.data.data.user);
+          setSecureUserData(transformedUser);
         }
         
         console.log('Token refreshed successfully');

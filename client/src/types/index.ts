@@ -6,13 +6,17 @@ export interface BaseEntity {
 }
 
 // User related types
-export interface User extends BaseEntity {
-  firstName: string;
-  lastName: string;
+export interface User {
+  id: number;
   email: string;
-  username: string;
   role: UserRole;
-  isActive: boolean;
+  username: string;
+  created_at: string;
+  updated_at: string;
+  is_active: boolean;
+  first_name?: string;
+  last_name?: string;
+  name?: string;
   lastLogin?: string;
 }
 
