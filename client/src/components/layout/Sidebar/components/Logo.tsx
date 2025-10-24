@@ -1,6 +1,4 @@
 import type { FC } from 'react';
-import { Button } from '@/components/ui/button';
-import { X } from 'lucide-react';
 
 interface LogoProps {
   isExpanded?: boolean;

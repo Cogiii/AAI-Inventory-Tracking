@@ -1,4 +1,4 @@
-import React from 'react';
+import type { FC } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 
@@ -11,7 +11,7 @@ interface NavigationItemProps {
   isExpanded?: boolean;
 }
 
-const NavigationItem: React.FC<NavigationItemProps> = ({ 
+const NavigationItem: FC<NavigationItemProps> = ({ 
   name, 
   href, 
   icon: Icon, 

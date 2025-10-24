@@ -1,4 +1,4 @@
-import React from 'react';
+import type { FC } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import NavigationItem from './NavigationItem';
 
@@ -17,7 +17,7 @@ interface NavigationSectionProps {
   isExpanded?: boolean;
 }
 
-const NavigationSection: React.FC<NavigationSectionProps> = ({ 
+const NavigationSection: FC<NavigationSectionProps> = ({ 
   title, 
   items, 
   userRole,

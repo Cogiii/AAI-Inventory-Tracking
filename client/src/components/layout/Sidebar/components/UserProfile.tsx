@@ -1,4 +1,4 @@
-import React from 'react';
+import type { FC } from 'react';
 import { Button } from '@/components/ui/button';
 import { LogOut } from 'lucide-react';
 import type { User } from '@/types';
@@ -9,7 +9,7 @@ interface UserProfileProps {
   isExpanded?: boolean;
 }
 
-const UserProfile: React.FC<UserProfileProps> = ({ user, onLogout, isExpanded = true }) => {
+const UserProfile: FC<UserProfileProps> = ({ user, onLogout, isExpanded = true }) => {
   // Helper function to get user's full name
   const getFullName = (user: User | null | undefined): string => {
     if (!user) return 'Guest User';

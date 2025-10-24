@@ -1,4 +1,4 @@
-import React from 'react';
+import type { FC } from 'react';
 import {
   Users,
   Home,
@@ -19,7 +19,7 @@ interface SidebarProps {
   onToggleExpand?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ isExpanded = true, onClose, onToggleExpand }) => {
+const Sidebar: FC<SidebarProps> = ({ isExpanded = true, onClose, onToggleExpand }) => {
   const { logout, user } = useAuth();
 
   const generalNavigation: NavigationItemConfig[] = [
