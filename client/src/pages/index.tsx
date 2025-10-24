@@ -2,7 +2,6 @@ import React from 'react';
 
 // Main pages
 export { default as Login } from './Login';
-export { default as RegisterPage } from './Register';
 export { default as Dashboard } from './Dashboard';
 
 // Utility pages

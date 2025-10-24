@@ -1,11 +1,14 @@
 import { RouterProvider } from 'react-router-dom';
 import { router } from './router';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 function App() {
   return (
-    <div className="min-h-screen bg-background font-sans antialiased">
-      <RouterProvider router={router} />
-    </div>
+    <ErrorBoundary>
+      <div className="min-h-screen bg-background font-sans antialiased">
+        <RouterProvider router={router} />
+      </div>
+    </ErrorBoundary>
   );
 }
 

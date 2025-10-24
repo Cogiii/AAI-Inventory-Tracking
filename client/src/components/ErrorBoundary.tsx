@@ -1,145 +1,176 @@
 import React from 'react';
-import { useUIStore } from '@/stores/uiStore';
+import { useRouteError, isRouteErrorResponse, useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Home, RefreshCw, ArrowLeft } from 'lucide-react';
+
+export function RouterErrorBoundary() {
+  const error = useRouteError();
+
+  let errorMessage: string;
+  let errorStatus: number | undefined;
+
+  if (isRouteErrorResponse(error)) {
+    errorMessage = error.statusText || error.data?.message || 'An error occurred';
+    errorStatus = error.status;
+  } else if (error instanceof Error) {
+    errorMessage = error.message;
+  } else if (typeof error === 'string') {
+    errorMessage = error;
+  } else {
+    errorMessage = 'Unknown error occurred';
+  }
+
+  return <ErrorDisplay error={errorMessage} status={errorStatus} />;
+}
+
+interface ErrorDisplayProps {
+  error: string;
+  status?: number;
+  stack?: string;
+}
+
+function ErrorDisplay({ error, status, stack }: ErrorDisplayProps) {
+  const navigate = useNavigate();
+
+  const handleGoBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/dashboard');
+    }
+  };
+
+  const handleRefresh = () => {
+    window.location.reload();
+  };
+
+  const handleGoHome = () => {
+    navigate('/dashboard');
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="max-w-lg w-full mx-4">
+        <div className="bg-white shadow-xl rounded-lg p-8">
+          {/* Error Icon */}
+          <div className="flex items-center justify-center w-16 h-16 mx-auto bg-red-100 rounded-full mb-6">
+            <svg 
+              className="w-8 h-8 text-red-600" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.082 16.5c-.77.833.192 2.5 1.732 2.5z" 
+              />
+            </svg>
+          </div>
+
+          {/* Error Content */}
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              {status ? `Error ${status}` : 'Oops! Something went wrong'}
+            </h1>
+            
+            <p className="text-gray-600 mb-6">
+              {error}
+            </p>
+
+            {/* Development Error Details */}
+            {import.meta.env.DEV && stack && (
+              <details className="mb-6 text-left bg-gray-50 rounded-lg p-4">
+                <summary className="cursor-pointer text-sm font-medium text-gray-700 mb-2">
+                  🔍 Error Details (Development)
+                </summary>
+                <pre className="text-xs bg-white p-3 rounded border overflow-auto">
+                  <code>{stack}</code>
+                </pre>
+              </details>
+            )}
+
+            {/* Action Buttons */}
+            <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Button 
+                  onClick={handleGoHome} 
+                  className="flex-1 flex items-center justify-center"
+                  variant="default"
+                >
+                  <Home className="mr-2 h-4 w-4" />
+                  Go to Dashboard
+                </Button>
+                
+                <Button 
+                  onClick={handleGoBack} 
+                  className="flex-1 flex items-center justify-center"
+                  variant="outline"
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Go Back
+                </Button>
+              </div>
+              
+              <Button 
+                onClick={handleRefresh} 
+                className="w-full flex items-center justify-center"
+                variant="ghost"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Refresh Page
+              </Button>
+            </div>
+
+            {/* Additional Help */}
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <p className="text-sm text-gray-500">
+                If this problem persists, please contact support or try refreshing the page.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface ErrorBoundaryState {
   hasError: boolean;
-  error: Error | null;
-  errorInfo: React.ErrorInfo | null;
+  error?: Error;
 }
 
-interface ErrorBoundaryProps {
-  children: React.ReactNode;
-  fallback?: React.ComponentType<{ error: Error | null; resetError: () => void }>;
-}
-
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
+export class ErrorBoundary extends React.Component<
+  React.PropsWithChildren<{}>,
+  ErrorBoundaryState
+> {
+  constructor(props: React.PropsWithChildren<{}>) {
     super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null
-    };
+    this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return {
       hasError: true,
-      error
+      error,
     };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    this.setState({
-      error,
-      errorInfo
-    });
-
-    // Log error to console in development
-    if (import.meta.env.DEV) {
-      console.error('ErrorBoundary caught an error:', error);
-      console.error('Error info:', errorInfo);
-    }
-
-    // In production, you might want to log to an error reporting service
-    // logErrorToService(error, errorInfo);
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
   }
-
-  resetError = () => {
-    this.setState({
-      hasError: false,
-      error: null,
-      errorInfo: null
-    });
-  };
 
   render() {
     if (this.state.hasError) {
-      if (this.props.fallback) {
-        const Fallback = this.props.fallback;
-        return <Fallback error={this.state.error} resetError={this.resetError} />;
-      }
-
-      return <DefaultErrorFallback error={this.state.error} resetError={this.resetError} />;
+      return (
+        <ErrorDisplay
+          error={this.state.error?.message || 'An unexpected error occurred'}
+          stack={this.state.error?.stack}
+        />
+      );
     }
 
     return this.props.children;
   }
 }
-
-interface ErrorFallbackProps {
-  error: Error | null;
-  resetError: () => void;
-}
-
-const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({ error, resetError }) => (
-  <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
-    <div className="max-w-md w-full">
-      <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6">
-        <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 dark:bg-red-900/20 rounded-full">
-          <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-          </svg>
-        </div>
-        
-        <div className="mt-4 text-center">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-            Something went wrong
-          </h3>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-            An unexpected error occurred. Please try refreshing the page or contact support if the problem persists.
-          </p>
-          
-          {import.meta.env.DEV && error && (
-            <details className="mt-4 text-left">
-              <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300">
-                Error Details (Development)
-              </summary>
-              <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-700 p-2 rounded overflow-auto">
-                {error.message}
-                {error.stack}
-              </pre>
-            </details>
-          )}
-          
-          <div className="mt-6 flex flex-col gap-3">
-            <button
-              onClick={resetError}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              Try Again
-            </button>
-            
-            <button
-              onClick={() => window.location.reload()}
-              className="w-full bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-            >
-              Reload Page
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-);
-
-// Hook for error boundary functionality in functional components
-export function useErrorHandler() {
-  const { addNotification } = useUIStore();
-
-  return React.useCallback((error: Error, errorInfo?: React.ErrorInfo) => {
-    console.error('Error caught by error handler:', error);
-    if (errorInfo) {
-      console.error('Error info:', errorInfo);
-    }
-
-    addNotification({
-      type: 'error',
-      title: 'An Error Occurred',
-      message: error.message || 'Something went wrong. Please try again.'
-    });
-  }, [addNotification]);
-}
-
-export { ErrorBoundary, DefaultErrorFallback };
-export type { ErrorBoundaryProps, ErrorFallbackProps };

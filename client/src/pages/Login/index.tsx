@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { FC, ChangeEvent, FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { authService } from '@/services/auth';
+import { useAuth } from '../../hooks/useAuth';
+import Loader from '../../components/ui/Loader';
 
 interface LoginForm {
   username: string;
@@ -9,14 +9,14 @@ interface LoginForm {
 }
 
 const Login: FC = () => {
-  const navigate = useNavigate();
   const [formData, setFormData] = useState<LoginForm>({
     username: '',
     password: ''
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string>('');
   const [showPassword, setShowPassword] = useState(false);
+
+  const { login, isLoading, isLoggingIn, error, clearError } = useAuth();
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -25,59 +25,35 @@ const Login: FC = () => {
       [name]: value
     }));
     if (localError) setLocalError('');
+    if (error) clearError();
   };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     e.stopPropagation();
     
-    if (isSubmitting || !isFormValid) {
+    if (isLoggingIn || !isFormValid) {
       return;
     }
     
     setLocalError('');
-    setIsSubmitting(true);
+    clearError();
 
     try {
-      const response = await authService.login({
+      await login({
         username: formData.username,
         password: formData.password
       });
-
-      if (response.success) {
-        localStorage.setItem('token', response.data.token);
-        localStorage.setItem('user', JSON.stringify(response.data.user));
-        
-        navigate('/dashboard');
-      } else {
-        setLocalError(response.message || 'Login failed. Please try again.');
-      }
     } catch (error: any) {
-      // console.error('Login error:', error);
-      
-      let errorMessage = 'Login failed. Please try again.';
-      
-      if (error.response) {
-        errorMessage = error.response.data?.message || error.response.data?.error || `Server error (${error.response.status})`;
-      } else if (error.request) {
-        errorMessage = 'Unable to connect to server. Please check your connection.';
-      } else {
-        errorMessage = error.message || 'An unexpected error occurred.';
-      }
-      
-      setLocalError(errorMessage);
-    } finally {
-      setIsSubmitting(false);
+      setLocalError(error.message || 'Login failed. Please try again.');
     }
   };
 
   const isFormValid = formData.username && formData.password;
 
-  if (isSubmitting) {
+  if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-orange-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
+      <Loader />
     );
   }
 
@@ -87,7 +63,7 @@ const Login: FC = () => {
         <img src="/AAI_logo_name.png" alt="" />
 
         {/* Error Message */}
-        {localError && (
+        {(localError || error) && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
             <div className="flex">
               <div className="flex-shrink-0">
@@ -96,7 +72,7 @@ const Login: FC = () => {
                 </svg>
               </div>
               <div className="ml-3">
-                <p className="text-sm text-red-800">{localError}</p>
+                <p className="text-sm text-red-800">{localError || error}</p>
               </div>
             </div>
           </div>
@@ -119,7 +95,7 @@ const Login: FC = () => {
                 onChange={handleInputChange}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 bg-white/50 backdrop-blur-sm"
                 placeholder="Enter your username"
-                disabled={isSubmitting}
+                disabled={isLoggingIn}
               />
               <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
                 <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -144,7 +120,7 @@ const Login: FC = () => {
                 onChange={handleInputChange}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 bg-white/50 backdrop-blur-sm pr-12"
                 placeholder="Enter your password"
-                disabled={isSubmitting}
+                disabled={isLoggingIn}
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="off"  
@@ -154,7 +130,7 @@ const Login: FC = () => {
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                disabled={isSubmitting}
+                disabled={isLoggingIn}
               >
                 {showPassword ? (
                   <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -173,10 +149,10 @@ const Login: FC = () => {
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={!isFormValid || isSubmitting}
+            disabled={!isFormValid || isLoggingIn}
             className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 transform hover:scale-[1.02] disabled:transform-none disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
           >
-            {isSubmitting ? (
+            {isLoggingIn ? (
               <div className="flex items-center justify-center">
                 <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>

@@ -2,6 +2,7 @@ import { createBrowserRouter } from 'react-router-dom';
 
 import Layout from './components/layout/Layout';
 import { ProtectedRoute, PublicRoute } from './components/auth';
+import { RouterErrorBoundary } from './components/ErrorBoundary';
 
 import {
   Login,
@@ -22,6 +23,7 @@ export const router = createBrowserRouter([
         <Login />
       </PublicRoute>
     ),
+    errorElement: <RouterErrorBoundary />,
   },
   {
     path: '/login',
@@ -30,6 +32,7 @@ export const router = createBrowserRouter([
         <Login />
       </PublicRoute>
     ),
+    errorElement: <RouterErrorBoundary />,
   },
   {
     path: '/dashboard',
@@ -40,10 +43,12 @@ export const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    errorElement: <RouterErrorBoundary />,
   },
   {
     path: '/unauthorized',
     element: <UnauthorizedPage />,
+    errorElement: <RouterErrorBoundary />,
   },
   {
     path: '/inventory',
@@ -54,6 +59,7 @@ export const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    errorElement: <RouterErrorBoundary />,
   },
   {
     path: '/analytics',
@@ -64,6 +70,7 @@ export const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    errorElement: <RouterErrorBoundary />,
   },
   {
     path: '/users',
@@ -74,6 +81,7 @@ export const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    errorElement: <RouterErrorBoundary />,
   },
   {
     path: '/settings',
@@ -84,11 +92,13 @@ export const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    errorElement: <RouterErrorBoundary />,
   },
 
   // Catch all route
   {
     path: '*',
     element: <NotFoundPage />,
+    errorElement: <RouterErrorBoundary />,
   },
 ]);

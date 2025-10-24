@@ -1,116 +1,104 @@
-import { useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { LoginCredentials, RegisterData, User } from '@/types';
-import { authService } from '@/services/auth';
-import { useAuthStore } from '@/stores/authStore';
+import { useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import AuthService, { type LoginCredentials, type User } from '../services/auth/authService';
+import { TokenValidator } from '../utils/tokenValidator';
 
-// Query keys for cache management
-export const authKeys = {
-  all: ['auth'] as const,
-  user: () => [...authKeys.all, 'user'] as const,
-  profile: () => [...authKeys.all, 'profile'] as const,
-};
+export const useAuth = () => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(AuthService.getCurrentUser());
+  const navigate = useNavigate();
 
-// Auth validation hook
-export const useAuthValidation = () => {
-  const { setUser, setLoading } = useAuthStore();
+  const login = useCallback(async (credentials: LoginCredentials) => {
+    setIsLoggingIn(true);
+    setError(null);
 
-  const query = useQuery({
-    queryKey: authKeys.user(),
-    queryFn: authService.validateToken,
-    enabled: !!localStorage.getItem('token'),
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    retry: false
-  });
-
-  // Handle the response manually using useEffect pattern
-  useEffect(() => {
-    if (query.isSuccess) {
-      setUser(query.data);
-    } else if (query.isError) {
-      setUser(null);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-    }
-    
-    if (!query.isLoading) {
-      setLoading(false);
-    }
-  }, [query.isSuccess, query.isError, query.isLoading, query.data, setUser, setLoading]);
-
-  return query;
-};
-
-// Login mutation
-export const useLogin = () => {
-  const queryClient = useQueryClient();
-  const { setUser, setLoading } = useAuthStore();
-
-  return useMutation({
-    mutationFn: (credentials: LoginCredentials) => authService.login(credentials),
-    onMutate: () => {
-      setLoading(true);
-    },
-    onSuccess: (response) => {
-      const { user, token } = response.data;
-      localStorage.setItem('token', token);
-      setUser(user);
+    try {
+      const response = await AuthService.login(credentials);
       
-      // Update query cache
-      queryClient.setQueryData(authKeys.user(), user);
-      setLoading(false);
-    },
-    onError: (error) => {
-      setUser(null);
-      setLoading(false);
-      throw error;
-    }
-  });
-};
-
-// Register mutation
-export const useRegister = () => {
-  const queryClient = useQueryClient();
-  const { setUser, setLoading } = useAuthStore();
-
-  return useMutation({
-    mutationFn: (data: RegisterData) => authService.register(data),
-    onMutate: () => {
-      setLoading(true);
-    },
-    onSuccess: (response) => {
-      const { user, token } = response.data;
-      localStorage.setItem('token', token);
-      setUser(user);
+      if (response.success) {
+        setUser(response.data.user);
+        TokenValidator.clearCache();
+        navigate('/dashboard');
+        return response;
+      } else {
+        throw new Error(response.message || 'Login failed');
+      }
+    } catch (err: any) {
+      let errorMessage = 'Login failed. Please try again.';
       
-      // Update query cache
-      queryClient.setQueryData(authKeys.user(), user);
-      setLoading(false);
-    },
-    onError: (error) => {
+      if (err.response) {
+        errorMessage = err.response.data?.message || err.response.data?.error || `Server error (${err.response.status})`;
+      } else if (err.request) {
+        errorMessage = 'Unable to connect to server. Please check your connection.';
+      } else {
+        errorMessage = err.message || 'An unexpected error occurred.';
+      }
+      
+      setError(errorMessage);
+      console.error('Login error:', err);
+      throw new Error(errorMessage);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  }, [navigate]);
+
+  const logout = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      await AuthService.logout();
       setUser(null);
-      setLoading(false);
-      throw error;
+      TokenValidator.clearCache();
+      navigate('/login');
+    } catch (err) {
+      console.error('Logout error:', err);
+      setUser(null);
+      TokenValidator.clearCache();
+      navigate('/login');
+    } finally {
+      setIsLoading(false);
     }
-  });
-};
+  }, [navigate]);
 
-// Logout mutation
-export const useLogout = () => {
-  const queryClient = useQueryClient();
-  const { logout } = useAuthStore();
-
-  return useMutation({
-    mutationFn: authService.logout,
-    onSuccess: () => {
-      logout();
-      // Clear all queries
-      queryClient.clear();
-    },
-    onError: () => {
-      // Even if logout fails on server, clear local state
-      logout();
-      queryClient.clear();
+  const validateTokenWithBackend = useCallback(async (): Promise<boolean> => {
+    setIsLoading(true);
+    try {
+      const isValid = await AuthService.validateToken();
+      if (!isValid) {
+        setUser(null);
+        navigate('/login');
+      }
+      return isValid;
+    } catch (err) {
+      console.error('Token validation error:', err);
+      setUser(null);
+      navigate('/login');
+      return false;
+    } finally {
+      setIsLoading(false);
     }
-  });
+  }, [navigate]);
+
+  const isAuthenticated = useCallback(() => {
+    return AuthService.isAuthenticated();
+  }, []);
+
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
+  return {
+    login,
+    logout,
+    isAuthenticated,
+    validateTokenWithBackend,
+    user,
+    isLoading,
+    isLoggingIn,
+    error,
+    clearError
+  };
 };

@@ -139,8 +139,7 @@ CREATE TABLE project_personnel (
 -- INVENTORY LOG
 CREATE TABLE inventory_log (
     id SERIAL PRIMARY KEY,
-    entity_type VARCHAR(50) CHECK (entity_type IN ('product', 'material')),
-    entity_id INT REFERENCES item(id) ON DELETE CASCADE,
+    item_id INT REFERENCES item(id) ON DELETE CASCADE,
     log_type VARCHAR(50) CHECK (log_type IN ('in', 'out', 'transfer')),
     reference_no VARCHAR(100),
     quantity INT NOT NULL CHECK (quantity >= 0),

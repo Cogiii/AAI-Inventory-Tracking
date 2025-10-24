@@ -1,5 +1,6 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
+import { hasValidToken } from '../../utils/tokenSecurity';
 
 interface PublicRouteProps {
   children: React.ReactNode;
@@ -10,14 +11,10 @@ const PublicRoute: React.FC<PublicRouteProps> = ({
   children, 
   restricted = false 
 }) => {
-  // Check if user is authenticated by checking localStorage
-  const token = localStorage.getItem('token');
-  const userStr = localStorage.getItem('user');
-  const user = userStr ? JSON.parse(userStr) : null;
-  
-  const isAuthenticated = !!(token && user);
+  // Check if user is authenticated using secure token validation
+  const isAuthenticated = hasValidToken();
 
-  // console.log('PublicRoute - Auth check:', { token: !!token, user: !!user, isAuthenticated, restricted });
+  // console.log('PublicRoute - Auth check:', { isAuthenticated, restricted });
 
   if (restricted && isAuthenticated) {
     // console.log('PublicRoute - Redirecting authenticated user to dashboard');
