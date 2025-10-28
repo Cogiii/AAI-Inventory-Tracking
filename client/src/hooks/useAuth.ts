@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import AuthService from '../services/auth/authService';
+import AuthService from '../services/auth/AuthService';
 import type { User, LoginCredentials } from '../types';
 import { TokenValidator } from '../utils/tokenValidator';
 

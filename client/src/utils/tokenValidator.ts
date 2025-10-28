@@ -1,4 +1,4 @@
-import AuthService from '../services/auth/authService';
+import AuthService from '../services/auth/AuthService';
 
 /**
  * Token validation utility

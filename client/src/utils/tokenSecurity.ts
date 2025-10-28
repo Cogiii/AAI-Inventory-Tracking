@@ -47,7 +47,7 @@ export const encryptToken = (token: string): string => {
     
     return encrypted;
   } catch (error) {
-    console.error('Token encryption failed:', error);
+    // console.error('Token encryption failed:', error);
     return token;
   }
 };
@@ -113,7 +113,7 @@ export const getSecureToken = (): string | null => {
     const decryptedToken = decryptToken(encryptedToken);
     
     if (!decryptedToken) {
-      console.warn('Corrupted token detected, cleaning up...');
+      // console.warn('Corrupted token detected, cleaning up...');
       removeSecureToken();
       return null;
     }
@@ -133,8 +133,6 @@ export const removeSecureToken = (): void => {
   try {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    // Remove any legacy metadata if it exists
-    localStorage.removeItem('token_meta');
   } catch (error) {
     console.error('Failed to remove secure token:', error);
   }

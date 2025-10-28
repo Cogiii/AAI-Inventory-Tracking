@@ -9,6 +9,8 @@ import {
   NotFoundPage,
   UnauthorizedPage,
   Dashboard,
+  Projects,
+  ProjectDetail,
   InventoryPage,
   AnalyticsPage,
   UsersPage,
@@ -48,6 +50,28 @@ export const router = createBrowserRouter([
   {
     path: '/unauthorized',
     element: <UnauthorizedPage />,
+    errorElement: <RouterErrorBoundary />,
+  },
+  {
+    path: '/projects',
+    element: (
+      <ProtectedRoute>
+        <Layout showSidebar={true}>
+          <Projects />
+        </Layout>
+      </ProtectedRoute>
+    ),
+    errorElement: <RouterErrorBoundary />,
+  },
+  {
+    path: '/project/:joNumber',
+    element: (
+      <ProtectedRoute>
+        <Layout showSidebar={true}>
+          <ProjectDetail />
+        </Layout>
+      </ProtectedRoute>
+    ),
     errorElement: <RouterErrorBoundary />,
   },
   {

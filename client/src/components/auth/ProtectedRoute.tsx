@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { TokenValidator } from '../../utils/tokenValidator';
-import AuthService from '../../services/auth/authService';
+import AuthService from '../../services/auth/AuthService';
+import { removeSecureToken } from '@/utils/tokenSecurity';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -12,6 +13,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children, 
   requiredRoles = [] 
 }) => {
+  const navigate = useNavigate();
   const location = useLocation();
   const [isTokenValid, setIsTokenValid] = useState<boolean | null>(null);
   const hasValidatedRef = useRef(false);
@@ -65,13 +67,16 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // Redirect to login if not authenticated or token invalid
   if (isTokenValid === false) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    removeSecureToken();
+    // navigate('/login');
+    return null;
   }
 
   // Check role permissions if required roles are specified
   const user = AuthService.getCurrentUser();
   if (requiredRoles.length > 0 && user && !requiredRoles.includes(user.role)) {
-    return <Navigate to="/unauthorized" replace />;
+    navigate('/unauthorized');
+    return null;
   }
 
   return <>{children}</>;

@@ -4,7 +4,7 @@
 
 
 -- ==============================================================
--- INVENTORY SYSTEM FOR PROJECT-BASED MARKETING
+-- INVENTORY SYSTEM FOR PROJECT-BASED MARKETING (Normalized)
 -- ==============================================================
 
 -- DROP DATABASE IF EXISTS AAI_inventory_db;
@@ -25,10 +25,10 @@ CREATE TABLE brand (
 );
 
 CREATE TABLE `position` (
-  id SERIAL PRIMARY KEY,
-  name VARCHAR(100) NOT NULL,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NULL ON UPDATE NOW()
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NULL ON UPDATE NOW()
 );
 
 CREATE TABLE user (
@@ -43,7 +43,6 @@ CREATE TABLE user (
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NULL ON UPDATE NOW()
 );
-
 
 CREATE TABLE role (
     id SERIAL PRIMARY KEY,
@@ -91,7 +90,7 @@ CREATE TABLE item (
     damaged_quantity INT DEFAULT 0,
     lost_quantity INT DEFAULT 0,
     available_quantity INT DEFAULT 0,
-    warehouse_location VARCHAR(255),
+    warehouse_location_id INT REFERENCES location(id) ON DELETE SET NULL,
     status VARCHAR(50),
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NULL ON UPDATE NOW()
@@ -116,7 +115,7 @@ CREATE TABLE project_day (
     id SERIAL PRIMARY KEY,
     project_id INT REFERENCES project(id) ON DELETE CASCADE,
     project_date DATE NOT NULL,
-    location VARCHAR(255),
+    location_id INT REFERENCES location(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NULL ON UPDATE NOW()
 );
@@ -152,8 +151,8 @@ CREATE TABLE inventory_log (
     log_type VARCHAR(50) CHECK (log_type IN ('in', 'out', 'transfer')),
     reference_no VARCHAR(100),
     quantity INT NOT NULL CHECK (quantity >= 0),
-    from_location VARCHAR(255),
-    to_location VARCHAR(255),
+    from_location_id INT REFERENCES location(id) ON DELETE SET NULL,
+    to_location_id INT REFERENCES location(id) ON DELETE SET NULL,
     handled_by INT REFERENCES user(id) ON DELETE SET NULL,
     photo TEXT,
     remarks TEXT,

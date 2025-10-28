@@ -27,9 +27,9 @@ const Sidebar: FC<SidebarProps> = ({ isExpanded = true, onClose, onToggleExpand 
   ];
 
   const recordsNavigation: NavigationItemConfig[] = [
-    { name: 'Projects', href: '/inventory', icon: FolderOpen },
+    { name: 'Projects', href: '/projects', icon: FolderOpen },
     { name: 'Calendar', href: '/calendar', icon: Calendar },
-    { name: 'Stocks', href: '/analytics', icon: Package },
+    { name: 'Stocks', href: '/inventory', icon: Package },
     { name: 'Employees', href: '/users', icon: Users, roles: ['admin', 'manager'] },
   ];
 
@@ -43,8 +43,7 @@ const Sidebar: FC<SidebarProps> = ({ isExpanded = true, onClose, onToggleExpand 
 
   return (
     <div
-      className={`fixed inset-y-0 left-0 z-50 transition-all duration-300 ease-in-out sm:static sm:inset-0 ${isExpanded ? 'translate-x-0 w-55' : '-translate-x-full sm:translate-x-0 sm:w-16'}`}
-      style={{ backgroundColor: '#EAEAEA' }}
+      className={`fixed inset-y-0 left-0 z-50 transition-all duration-300 ease-in-out sm:static sm:inset-0 bg-gray ${isExpanded ? 'translate-x-0 w-55' : '-translate-x-full sm:translate-x-0 sm:w-16'}`}
     >
       <div className="flex flex-col h-full">
         <Logo
@@ -56,7 +55,12 @@ const Sidebar: FC<SidebarProps> = ({ isExpanded = true, onClose, onToggleExpand 
             title="General"
             items={generalNavigation}
             userRole={user?.role}
-            onItemClick={onClose}
+            onItemClick={() => {
+              // Only close sidebar on mobile screens
+              if (window.innerWidth < 640) {
+                onClose();
+              }
+            }}
             isExpanded={isExpanded}
           />
 
@@ -64,7 +68,12 @@ const Sidebar: FC<SidebarProps> = ({ isExpanded = true, onClose, onToggleExpand 
             title="Records"
             items={recordsNavigation}
             userRole={user?.role}
-            onItemClick={onClose}
+            onItemClick={() => {
+              // Only close sidebar on mobile screens
+              if (window.innerWidth < 640) {
+                onClose();
+              }
+            }}
             isExpanded={isExpanded}
           />
         </nav>
@@ -81,8 +90,7 @@ const Sidebar: FC<SidebarProps> = ({ isExpanded = true, onClose, onToggleExpand 
               variant="ghost"
               size="sm"
               onClick={onToggleExpand}
-              className={`w-full hover:bg-gray-200 hover:cursor-pointer transition-colors ${isExpanded ? 'justify-start' : 'justify-center'}`}
-              style={{ color: '#4C4C4C' }}
+              className={`w-full hover:bg-gray-200 hover:cursor-pointer transition-colors text-gray-custom ${isExpanded ? 'justify-start' : 'justify-center'}`}
             >
               {isExpanded ? (
                 <>

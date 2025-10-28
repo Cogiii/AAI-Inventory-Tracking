@@ -3,6 +3,8 @@ import React from 'react';
 // Main pages
 export { default as Login } from './Login';
 export { default as Dashboard } from './Dashboard';
+export { default as Projects } from './Projects';
+export { default as ProjectDetail } from './ProjectDetail';
 
 // Utility pages
 export { default as NotFoundPage } from './NotFound';

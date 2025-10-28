@@ -58,8 +58,6 @@ const UserProfile: FC<UserProfileProps> = ({ user, onLogout, isExpanded = true }
     );
   }
   
-  console.log('UserProfile render with user:', user);
-
   return (
     <div className="p-4 m-3 rounded-lg" style={{ backgroundColor: '#FFFFFF' }}>
       <div className="flex items-center justify-between">
