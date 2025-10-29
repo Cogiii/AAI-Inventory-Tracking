@@ -9,29 +9,29 @@ USE AAI_inventory_db;
 -- ====================
 -- 1. INVENTORY LOGS
 -- ====================
-INSERT INTO inventory_log (entity_type, entity_id, log_type, reference_no, quantity, from_location, to_location, handled_by, photo, remarks) VALUES
--- Incoming inventory
-('product', 1, 'in', 'PO-2025-001', 50, 'Supplier Warehouse', 'Main Warehouse - A1', 1, NULL, 'Initial stock delivery of INGCO Angle Grinders'),
-('product', 2, 'in', 'PO-2025-002', 30, 'Supplier Warehouse', 'Main Warehouse - A2', 1, NULL, 'Makita cordless drills received'),
-('product', 3, 'in', 'PO-2025-003', 100, 'Supplier Warehouse', 'Main Warehouse - B1', 2, NULL, 'Stanley measuring tapes bulk delivery'),
-('material', 11, 'in', 'PO-2025-004', 500, 'Cement Plant', 'Main Warehouse - C1', 3, NULL, 'Cement delivery - 500 bags'),
-('material', 12, 'in', 'PO-2025-005', 200, 'Steel Supplier', 'Main Warehouse - D1', 3, NULL, 'Steel rebar delivery'),
+INSERT INTO inventory_log (item_id, log_type, reference_no, quantity, from_location_id, to_location_id, handled_by, photo, remarks) VALUES
+-- Incoming inventory (using NULL for from_location_id as items come from external suppliers)
+(1, 'in', 'PO-2025-001', 100, NULL, 1, 1, NULL, 'Initial stock delivery of Sintra Foam Boards'),
+(2, 'in', 'PO-2025-002', 200, NULL, 1, 1, NULL, 'Vinyl Tarpaulin bulk delivery'),
+(3, 'in', 'PO-2025-003', 500, NULL, 1, 2, NULL, 'Digital Print Stickers received'),
+(11, 'in', 'PO-2025-004', 100, NULL, 1, 3, NULL, 'Marine Plywood delivery - 100 sheets'),
+(12, 'in', 'PO-2025-005', 80, NULL, 1, 3, NULL, 'Particle Board delivery'),
 
--- Project allocations (out)
-('product', 1, 'out', 'ALLOC-BGC-001', 5, 'Main Warehouse - A1', 'BGC Office Building Project', 4, NULL, 'Allocated angle grinders to BGC project'),
-('product', 2, 'out', 'ALLOC-BGC-002', 3, 'Main Warehouse - A2', 'BGC Office Building Project', 4, NULL, 'Allocated cordless drills to BGC project'),
-('material', 11, 'out', 'ALLOC-BGC-003', 20, 'Main Warehouse - C1', 'BGC Office Building Project', 4, NULL, 'Cement bags for foundation work'),
-('product', 7, 'out', 'ALLOC-EW-001', 2, 'Main Warehouse - A6', 'Eastwood Mall Construction', 5, NULL, 'Multi-tools for renovation work'),
-('material', 17, 'out', 'ALLOC-EW-002', 15, 'Main Warehouse - I1', 'Eastwood Mall Construction', 5, NULL, 'Ceramic tiles for flooring'),
+-- Event allocations (out)
+(1, 'out', 'ALLOC-SM-001', 10, 1, 3, 4, NULL, 'Allocated foam boards to SM Megamall Tech Fair'),
+(2, 'out', 'ALLOC-SM-002', 5, 1, 3, 4, NULL, 'Allocated tarpaulin to SM Megamall Tech Fair'),
+(11, 'out', 'ALLOC-SM-003', 15, 1, 3, 4, NULL, 'Marine plywood for booth construction'),
+(7, 'out', 'ALLOC-AY-001', 2, 1, 4, 5, NULL, 'Wireless mic system for Ayala Centrio event'),
+(17, 'out', 'ALLOC-AY-002', 10, 1, 4, 5, NULL, 'Carpet tiles for booth flooring'),
 
--- Returns from projects (in)
-('product', 1, 'in', 'RET-BGC-001', 4, 'BGC Office Building Project', 'Main Warehouse - A1', 6, NULL, 'Returned angle grinders after use'),
-('product', 2, 'in', 'RET-BGC-002', 3, 'BGC Office Building Project', 'Main Warehouse - A2', 6, NULL, 'Returned cordless drills'),
-('product', 7, 'in', 'RET-EW-001', 2, 'Eastwood Mall Construction', 'Main Warehouse - A6', 7, NULL, 'Returned multi-tools'),
+-- Returns from events (in)
+(1, 'in', 'RET-SM-001', 9, 3, 1, 6, NULL, 'Returned foam boards after SM Megamall event'),
+(2, 'in', 'RET-SM-002', 5, 3, 1, 6, NULL, 'Returned tarpaulin from SM Megamall'),
+(7, 'in', 'RET-AY-001', 2, 4, 1, 7, NULL, 'Returned wireless mic system'),
 
--- Transfers between locations
-('material', 11, 'transfer', 'TRF-001', 50, 'Main Warehouse - C1', 'Secondary Warehouse', 2, NULL, 'Transfer cement to secondary location'),
-('product', 21, 'transfer', 'TRF-002', 25, 'Main Warehouse - S1', 'Secondary Warehouse', 2, NULL, 'Transfer safety helmets for distribution');
+-- Transfers between warehouses
+(11, 'transfer', 'TRF-001', 10, 1, 2, 2, NULL, 'Transfer plywood to Materials Storage'),
+(21, 'transfer', 'TRF-002', 50, 2, 1, 2, NULL, 'Transfer promotional t-shirts for distribution');
 
 -- ====================
 -- 2. ACTIVITY LOGS

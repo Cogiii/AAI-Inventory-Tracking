@@ -7,7 +7,7 @@
 -- INVENTORY SYSTEM FOR PROJECT-BASED MARKETING (Normalized)
 -- ==============================================================
 
--- DROP DATABASE IF EXISTS AAI_inventory_db;
+DROP DATABASE IF EXISTS AAI_inventory_db;
 CREATE DATABASE IF NOT EXISTS AAI_inventory_db;
 
 USE AAI_inventory_db;

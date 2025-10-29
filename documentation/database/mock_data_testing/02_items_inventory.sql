@@ -10,123 +10,123 @@ USE AAI_inventory_db;
 -- 1. ITEMS (PRODUCTS & MATERIALS)
 -- ====================
 
--- Power Tools (Products)
-INSERT INTO item (type, brand_id, name, description, delivered_quantity, damaged_quantity, lost_quantity, available_quantity, warehouse_location, status) VALUES
-('product', 1, 'INGCO Angle Grinder 4.5"', 'Heavy-duty angle grinder with 850W motor', 50, 2, 0, 48, 'Main Warehouse - A1', 'active'),
-('product', 2, 'Makita Cordless Drill 18V', 'Lithium-ion cordless drill with 2 batteries', 30, 1, 0, 29, 'Main Warehouse - A2', 'active'),
-('product', 3, 'Stanley Measuring Tape 8m', 'Professional measuring tape with magnetic tip', 100, 0, 2, 98, 'Main Warehouse - B1', 'active'),
-('product', 4, 'Black+Decker Circular Saw', '7.25" circular saw with laser guide', 25, 1, 0, 24, 'Main Warehouse - A3', 'active'),
-('product', 5, 'Bosch Hammer Drill', 'SDS-Plus rotary hammer drill', 20, 0, 1, 19, 'Main Warehouse - A4', 'active'),
-('product', 6, 'DeWalt Impact Driver', '20V MAX cordless impact driver', 35, 1, 0, 34, 'Main Warehouse - A5', 'active'),
-('product', 7, 'Milwaukee Multi-Tool', 'Oscillating multi-tool kit', 15, 0, 0, 15, 'Main Warehouse - A6', 'active'),
-('product', 8, 'Ryobi Jigsaw', 'Orbital jigsaw with laser guide', 40, 2, 0, 38, 'Main Warehouse - A7', 'active'),
-('product', 9, 'Craftsman Socket Set', '230-piece mechanics tool set', 20, 0, 0, 20, 'Main Warehouse - B2', 'active'),
-('product', 10, 'Hilti Concrete Drill', 'Heavy-duty concrete drilling system', 10, 0, 0, 10, 'Main Warehouse - A8', 'active');
+-- Display & Signage Materials (Products)
+INSERT INTO item (type, brand_id, name, description, delivered_quantity, damaged_quantity, lost_quantity, available_quantity, warehouse_location_id, status) VALUES
+('product', 1, 'Sintra Foam Board 4x8ft 5mm', 'Premium white foam board for displays', 100, 3, 1, 96, 1, 'active'),
+('product', 2, 'Vinyl Tarpaulin 13oz', 'Weather-resistant tarpaulin per sqm', 200, 5, 2, 193, 1, 'active'),
+('product', 3, 'Digital Print Stickers A4', 'High-quality adhesive stickers', 500, 10, 5, 485, 1, 'active'),
+('product', 4, 'Flex Banner 440gsm', 'Outdoor flex banner material per sqm', 150, 2, 0, 148, 1, 'active'),
+('product', 11, 'LED Strip Lights 5m', 'RGB color-changing LED strips', 80, 1, 0, 79, 1, 'active'),
+('product', 12, 'Portable LED Spotlights', '50W rechargeable LED spotlights', 40, 0, 1, 39, 1, 'active'),
+('product', 10, 'Wireless Microphone System', 'Professional wireless mic system', 25, 1, 0, 24, 1, 'active'),
+('product', 12, 'Bluetooth Speaker 100W', 'High-powered Bluetooth speakers', 30, 0, 0, 30, 1, 'active'),
+('product', 9, 'Tool Kit Basic', '50-piece booth assembly tool set', 20, 0, 0, 20, 1, 'active'),
+('product', 9, 'Electric Drill Set', 'Cordless drill with bits for booth setup', 15, 0, 0, 15, 1, 'active');
 
--- Construction Materials
-INSERT INTO item (type, brand_id, name, description, delivered_quantity, damaged_quantity, lost_quantity, available_quantity, warehouse_location, status) VALUES
-('material', NULL, 'Cement Portland 40kg', 'High-grade portland cement bags', 500, 15, 5, 480, 'Main Warehouse - C1', 'active'),
-('material', NULL, 'Steel Rebar 12mm', '6-meter steel reinforcement bars', 200, 8, 2, 190, 'Main Warehouse - D1', 'active'),
-('material', NULL, 'Plywood 4x8 Marine Grade', '18mm marine grade plywood sheets', 150, 3, 1, 146, 'Main Warehouse - E1', 'active'),
-('material', NULL, 'PVC Pipe 4 inches', '6-meter PVC drainage pipes', 100, 2, 0, 98, 'Main Warehouse - F1', 'active'),
-('material', NULL, 'Electrical Wire 14AWG', '100-meter copper electrical wire rolls', 80, 1, 0, 79, 'Main Warehouse - G1', 'active'),
-('material', NULL, 'Paint Primer White 4L', 'High-quality primer for walls', 60, 0, 1, 59, 'Main Warehouse - H1', 'active'),
-('material', NULL, 'Ceramic Tiles 60x60cm', 'Premium ceramic floor tiles per box', 300, 12, 3, 285, 'Main Warehouse - I1', 'active'),
-('material', NULL, 'Roofing Sheets Galvanized', '3-meter corrugated roofing sheets', 120, 4, 0, 116, 'Main Warehouse - J1', 'active'),
-('material', NULL, 'Sand Fine Grade', 'Construction sand per cubic meter', 50, 0, 0, 50, 'Main Warehouse - Yard', 'active'),
-('material', NULL, 'Gravel 3/4 inch', 'Aggregate gravel per cubic meter', 40, 0, 0, 40, 'Main Warehouse - Yard', 'active');
+-- Booth Construction Materials
+INSERT INTO item (type, brand_id, name, description, delivered_quantity, damaged_quantity, lost_quantity, available_quantity, warehouse_location_id, status) VALUES
+('material', 7, 'Marine Plywood 4x8ft 12mm', 'High-quality marine plywood sheets', 100, 2, 1, 97, 1, 'active'),
+('material', 8, 'Particle Board 4x8ft 18mm', 'Smooth particle board for displays', 80, 1, 0, 79, 1, 'active'),
+('material', 9, 'Aluminum Frame Strips 3m', 'Lightweight aluminum framing', 200, 3, 2, 195, 1, 'active'),
+('material', NULL, 'PVC Pipe 2 inches 6m', 'White PVC pipes for booth structure', 150, 2, 0, 148, 1, 'active'),
+('material', NULL, 'Electrical Wire 12AWG', '50-meter electrical wire rolls', 60, 0, 1, 59, 1, 'active'),
+('material', 5, 'Boysen White Paint 4L', 'Premium white paint for booth walls', 40, 0, 0, 40, 1, 'active'),
+('material', 6, 'Davies Primer Gray 4L', 'High-quality gray primer', 35, 1, 0, 34, 1, 'active'),
+('material', NULL, 'Carpet Tiles Gray 50x50cm', 'Commercial carpet tiles per box', 100, 2, 1, 97, 1, 'active'),
+('material', NULL, 'Glass Panels 4x6ft', 'Tempered glass display panels', 30, 0, 0, 30, 1, 'active'),
+('material', NULL, 'Steel Brackets L-Shape', 'Heavy-duty steel brackets for support', 200, 5, 2, 193, 1, 'active');
 
--- Safety Equipment (Products)
-INSERT INTO item (type, brand_id, name, description, delivered_quantity, damaged_quantity, lost_quantity, available_quantity, warehouse_location, status) VALUES
-('product', NULL, 'Safety Helmet White', 'ANSI approved safety helmets', 200, 5, 3, 192, 'Main Warehouse - S1', 'active'),
-('product', NULL, 'Safety Vest High-Vis', 'Reflective safety vests Class 2', 150, 2, 1, 147, 'Main Warehouse - S2', 'active'),
-('product', NULL, 'Work Boots Steel Toe', 'Size 8-12 steel toe safety boots', 100, 1, 0, 99, 'Main Warehouse - S3', 'active'),
-('product', NULL, 'Safety Gloves', 'Cut-resistant work gloves', 300, 8, 2, 290, 'Main Warehouse - S4', 'active'),
-('product', NULL, 'Safety Goggles', 'Anti-fog safety glasses', 180, 3, 1, 176, 'Main Warehouse - S5', 'active');
+-- Promotional & Giveaway Items (Products)
+INSERT INTO item (type, brand_id, name, description, delivered_quantity, damaged_quantity, lost_quantity, available_quantity, warehouse_location_id, status) VALUES
+('product', NULL, 'Branded T-Shirts Medium', 'Company logo t-shirts medium size', 200, 3, 2, 195, 2, 'active'),
+('product', NULL, 'Promotional Tote Bags', 'Eco-friendly canvas tote bags', 300, 5, 5, 290, 2, 'active'),
+('product', NULL, 'Custom Ballpens', 'Branded ballpoint pens with logo', 1000, 20, 10, 970, 2, 'active'),
+('product', NULL, 'Branded Keychains', 'Metal keychains with company logo', 500, 8, 2, 490, 2, 'active'),
+('product', NULL, 'Event Lanyards', 'Custom printed event lanyards', 400, 5, 3, 392, 2, 'active');
 
 -- ====================
 -- 2. PROJECTS
 -- ====================
 INSERT INTO project (jo_number, name, description, status, created_by) VALUES
-('JO-2025-001', 'BGC Office Building Construction', 'Multi-story office building in Bonifacio Global City', 'ongoing', 1),
-('JO-2025-002', 'Eastwood Mall Renovation', 'Major renovation of Eastwood Mall shopping center', 'ongoing', 1),
-('JO-2025-003', 'Alabang Town Center Expansion', 'Addition of new wing to existing mall', 'upcoming', 2),
-('JO-2025-004', 'Cebu IT Park Development', 'New IT park construction in Cebu', 'ongoing', 2),
-('JO-2025-005', 'Davao Convention Center', 'Large convention and exhibition center', 'upcoming', 1),
-('JO-2025-006', 'Iloilo Business District', 'Mixed-use development project', 'completed', 2),
-('JO-2025-007', 'Baguio Mountain Resort', 'Eco-friendly resort development', 'upcoming', 1);
+('MKT-2025-001', 'SM Megamall Tech Fair', 'Technology exhibition booth at SM Megamall Atrium', 'ongoing', 1),
+('MKT-2025-002', 'Ayala Centrio Product Launch', 'New product launch event at Ayala Malls Centrio', 'ongoing', 1),
+('MKT-2025-003', 'MOA Summer Festival Booth', 'Summer festival promotional booth at Mall of Asia', 'upcoming', 2),
+('MKT-2025-004', 'Cebu IT Park Trade Show', 'Business solutions trade show in Cebu IT Park', 'ongoing', 2),
+('MKT-2025-005', 'Davao Convention Expo', 'Regional business expo at Davao Convention Center', 'upcoming', 1),
+('MKT-2025-006', 'Robinsons Iloilo Brand Activation', 'Interactive brand experience at Robinsons Place', 'completed', 2),
+('MKT-2025-007', 'Baguio Session Road Roadshow', 'Mobile marketing roadshow in Baguio City', 'upcoming', 1);
 
 -- ====================
 -- 3. PROJECT DAYS
 -- ====================
-INSERT INTO project_day (project_id, project_date, location) VALUES
--- BGC Office Building (Project 1) - Recent days
-(1, '2025-10-15', 'BGC Office Building Project'),
-(1, '2025-10-16', 'BGC Office Building Project'),
-(1, '2025-10-17', 'BGC Office Building Project'),
-(1, '2025-10-18', 'BGC Office Building Project'),
-(1, '2025-10-19', 'BGC Office Building Project'),
-(1, '2025-10-20', 'BGC Office Building Project'),
-(1, '2025-10-21', 'BGC Office Building Project'),
-(1, '2025-10-22', 'BGC Office Building Project'),
+INSERT INTO project_day (project_id, project_date, location_id) VALUES
+-- SM Megamall Tech Fair (Project 1) - Event days
+(1, '2025-10-15', 3), -- SM Megamall Atrium Event
+(1, '2025-10-16', 3), -- SM Megamall Atrium Event
+(1, '2025-10-17', 3), -- SM Megamall Atrium Event
+(1, '2025-10-18', 3), -- SM Megamall Atrium Event
+(1, '2025-10-19', 3), -- SM Megamall Atrium Event
+(1, '2025-10-20', 3), -- SM Megamall Atrium Event
+(1, '2025-10-21', 3), -- SM Megamall Atrium Event
+(1, '2025-10-22', 3), -- SM Megamall Atrium Event
 
--- Eastwood Mall (Project 2) - Recent days
-(2, '2025-10-15', 'Eastwood Mall Construction'),
-(2, '2025-10-16', 'Eastwood Mall Construction'),
-(2, '2025-10-17', 'Eastwood Mall Construction'),
-(2, '2025-10-18', 'Eastwood Mall Construction'),
-(2, '2025-10-19', 'Eastwood Mall Construction'),
-(2, '2025-10-20', 'Eastwood Mall Construction'),
-(2, '2025-10-21', 'Eastwood Mall Construction'),
+-- Ayala Centrio Product Launch (Project 2) - Event days
+(2, '2025-10-15', 4), -- Ayala Malls Centrio Booth
+(2, '2025-10-16', 4), -- Ayala Malls Centrio Booth
+(2, '2025-10-17', 4), -- Ayala Malls Centrio Booth
+(2, '2025-10-18', 4), -- Ayala Malls Centrio Booth
+(2, '2025-10-19', 4), -- Ayala Malls Centrio Booth
+(2, '2025-10-20', 4), -- Ayala Malls Centrio Booth
+(2, '2025-10-21', 4), -- Ayala Malls Centrio Booth
 
--- Cebu IT Park (Project 4) - Recent days
-(4, '2025-10-16', 'Cebu IT Park Development'),
-(4, '2025-10-17', 'Cebu IT Park Development'),
-(4, '2025-10-18', 'Cebu IT Park Development'),
-(4, '2025-10-19', 'Cebu IT Park Development'),
-(4, '2025-10-20', 'Cebu IT Park Development');
+-- Cebu IT Park Trade Show (Project 4) - Event days
+(4, '2025-10-16', 6), -- Cebu IT Park Trade Show
+(4, '2025-10-17', 6), -- Cebu IT Park Trade Show
+(4, '2025-10-18', 6), -- Cebu IT Park Trade Show
+(4, '2025-10-19', 6), -- Cebu IT Park Trade Show
+(4, '2025-10-20', 6); -- Cebu IT Park Trade Show
 
 -- ====================
 -- 4. PROJECT ITEMS (ALLOCATIONS)
 -- ====================
 INSERT INTO project_item (project_day_id, item_id, allocated_quantity, damaged_quantity, lost_quantity, returned_quantity, status) VALUES
--- BGC Office Building allocations
-(1, 1, 5, 0, 0, 4, 'returned'), -- Angle Grinders
-(1, 2, 3, 0, 0, 3, 'returned'), -- Cordless Drills
-(1, 11, 20, 1, 0, 19, 'returned'), -- Cement bags
-(1, 12, 10, 0, 0, 10, 'returned'), -- Steel Rebar
+-- SM Megamall Tech Fair allocations
+(1, 1, 10, 0, 0, 9, 'returned'), -- Sintra Foam Boards
+(1, 2, 5, 0, 0, 5, 'returned'), -- Vinyl Tarpaulin
+(1, 11, 15, 1, 0, 14, 'returned'), -- Marine Plywood
+(1, 12, 8, 0, 0, 8, 'returned'), -- Particle Board
 
-(2, 1, 4, 0, 0, 4, 'returned'), -- Angle Grinders
-(2, 3, 10, 0, 1, 9, 'returned'), -- Measuring Tapes
-(2, 13, 8, 0, 0, 8, 'returned'), -- Plywood sheets
-(2, 21, 15, 0, 0, 15, 'returned'), -- Safety Helmets
+(2, 1, 8, 0, 0, 8, 'returned'), -- Sintra Foam Boards
+(2, 3, 50, 0, 2, 48, 'returned'), -- Digital Print Stickers
+(2, 13, 10, 0, 0, 10, 'returned'), -- Aluminum Frame Strips
+(2, 21, 100, 0, 0, 100, 'returned'), -- Branded T-Shirts
 
-(3, 4, 2, 0, 0, 2, 'returned'), -- Circular Saws
-(3, 5, 2, 0, 0, 2, 'returned'), -- Hammer Drills
-(3, 14, 5, 0, 0, 5, 'returned'), -- PVC Pipes
-(3, 15, 3, 0, 0, 3, 'returned'), -- Electrical Wire
+(3, 4, 3, 0, 0, 3, 'returned'), -- Flex Banner
+(3, 5, 8, 0, 0, 8, 'returned'), -- LED Strip Lights
+(3, 14, 5, 0, 0, 5, 'returned'), -- PVC Pipe
+(3, 15, 2, 0, 0, 2, 'returned'), -- Electrical Wire
 
 -- Current day allocations (not yet returned)
-(8, 1, 6, 0, 0, 0, 'allocated'), -- Angle Grinders - current
-(8, 2, 4, 0, 0, 0, 'allocated'), -- Cordless Drills - current
-(8, 6, 3, 0, 0, 0, 'allocated'), -- Impact Drivers - current
-(8, 21, 20, 0, 0, 0, 'allocated'), -- Safety Helmets - current
-(8, 22, 20, 0, 0, 0, 'allocated'), -- Safety Vests - current
+(8, 1, 12, 0, 0, 0, 'allocated'), -- Sintra Foam Boards - current
+(8, 2, 6, 0, 0, 0, 'allocated'), -- Vinyl Tarpaulin - current
+(8, 6, 4, 0, 0, 0, 'allocated'), -- Portable LED Spotlights - current
+(8, 21, 50, 0, 0, 0, 'allocated'), -- Branded T-Shirts - current
+(8, 22, 80, 0, 0, 0, 'allocated'), -- Promotional Tote Bags - current
 
--- Eastwood Mall allocations
-(9, 7, 2, 0, 0, 2, 'returned'), -- Multi-Tools
-(9, 8, 3, 1, 0, 2, 'returned'), -- Jigsaws
-(9, 16, 5, 0, 0, 5, 'returned'), -- Paint Primer
-(9, 17, 15, 2, 0, 13, 'returned'), -- Ceramic Tiles
+-- Ayala Centrio Product Launch allocations
+(9, 7, 2, 0, 0, 2, 'returned'), -- Wireless Microphone System
+(9, 8, 2, 0, 0, 2, 'returned'), -- Bluetooth Speaker
+(9, 16, 3, 0, 0, 3, 'returned'), -- Boysen White Paint
+(9, 17, 10, 1, 0, 9, 'returned'), -- Carpet Tiles
 
-(13, 9, 2, 0, 0, 2, 'returned'), -- Socket Sets
-(13, 10, 1, 0, 0, 1, 'returned'), -- Concrete Drills
-(13, 18, 8, 1, 0, 7, 'returned'), -- Roofing Sheets
+(13, 9, 1, 0, 0, 1, 'returned'), -- Tool Kit Basic
+(13, 10, 1, 0, 0, 1, 'returned'), -- Electric Drill Set
+(13, 18, 2, 0, 0, 2, 'returned'), -- Glass Panels
 
--- Current Eastwood allocations
-(15, 1, 3, 0, 0, 0, 'allocated'), -- Angle Grinders - current
-(15, 4, 2, 0, 0, 0, 'allocated'), -- Circular Saws - current
-(15, 23, 10, 0, 0, 0, 'allocated'), -- Work Boots - current
+-- Current Ayala Centrio allocations
+(15, 1, 6, 0, 0, 0, 'allocated'), -- Sintra Foam Boards - current
+(15, 4, 4, 0, 0, 0, 'allocated'), -- Flex Banner - current
+(15, 23, 200, 0, 0, 0, 'allocated'), -- Custom Ballpens - current
 
 -- Cebu IT Park allocations
 (16, 5, 1, 0, 0, 1, 'returned'), -- Hammer Drills
@@ -141,26 +141,26 @@ INSERT INTO project_item (project_day_id, item_id, allocated_quantity, damaged_q
 -- 5. PROJECT PERSONNEL ASSIGNMENTS
 -- ====================
 INSERT INTO project_personnel (project_day_id, personnel_id, role_id) VALUES
--- BGC Office Building team
-(8, 1, 1), -- Roberto Silva as Project Manager
-(8, 2, 2), -- Carmen Dela Cruz as Site Supervisor
-(8, 3, 4), -- Eduardo Ramos as Equipment Operator
-(8, 4, 5), -- Patricia Morales as Safety Officer
-(8, 5, 9), -- Ferdinand Aquino as Site Worker
-(8, 6, 9), -- Rosario Valdez as Site Worker
+-- SM Megamall Tech Fair team
+(8, 1, 1), -- Roberto Silva as Event Coordinator
+(8, 2, 2), -- Carmen Dela Cruz as Booth Designer
+(8, 3, 3), -- Eduardo Ramos as Display Specialist
+(8, 4, 4), -- Patricia Morales as Audio-Visual Technician
+(8, 5, 5), -- Ferdinand Aquino as Brand Ambassador
+(8, 6, 9), -- Rosario Valdez as Inventory Supervisor
 
--- Eastwood Mall team
-(15, 7, 1), -- Benjamin Castro as Project Manager
-(15, 8, 2), -- Gloria Herrera as Site Supervisor
-(15, 9, 6), -- Antonio Jimenez as Quality Controller
-(15, 10, 9), -- Maricel Rodriguez as Site Worker
-(15, 11, 9), -- Diego Fernandez as Site Worker
+-- Ayala Centrio Product Launch team
+(15, 7, 1), -- Benjamin Castro as Event Coordinator
+(15, 8, 6), -- Gloria Herrera as Creative Director
+(15, 9, 7), -- Antonio Jimenez as Marketing Coordinator
+(15, 10, 5), -- Maricel Rodriguez as Brand Ambassador
+(15, 11, 9), -- Diego Fernandez as Inventory Supervisor
 
--- Cebu IT Park team
-(20, 12, 1), -- Cristina Ortega as Project Manager
-(20, 13, 2), -- Rafael Vargas as Site Supervisor
-(20, 14, 7), -- Elena Castillo as Logistics Coordinator
-(20, 15, 9); -- Oscar Medina as Site Worker
+-- Cebu IT Park Trade Show team
+(20, 12, 1), -- Cristina Ortega as Event Coordinator
+(20, 13, 2), -- Rafael Vargas as Booth Designer
+(20, 14, 8), -- Elena Castillo as Logistics Coordinator
+(20, 15, 3); -- Oscar Medina as Display Specialist
 
 -- ====================
 -- SUCCESS MESSAGE
