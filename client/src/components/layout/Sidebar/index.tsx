@@ -29,7 +29,7 @@ const Sidebar: FC<SidebarProps> = ({ isExpanded = true, onClose, onToggleExpand 
   const recordsNavigation: NavigationItemConfig[] = [
     { name: 'Projects', href: '/projects', icon: FolderOpen },
     { name: 'Calendar', href: '/calendar', icon: Calendar },
-    { name: 'Stocks', href: '/inventory', icon: Package },
+    { name: 'Inventory', href: '/inventory', icon: Package },
     { name: 'Employees', href: '/users', icon: Users, roles: ['admin', 'manager'] },
   ];
 

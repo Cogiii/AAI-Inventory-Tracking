@@ -11,6 +11,7 @@ import {
   Dashboard,
   Projects,
   ProjectDetail,
+  Calendar,
   InventoryPage,
   AnalyticsPage,
   UsersPage,
@@ -58,6 +59,17 @@ export const router = createBrowserRouter([
       <ProtectedRoute>
         <Layout showSidebar={true}>
           <Projects />
+        </Layout>
+      </ProtectedRoute>
+    ),
+    errorElement: <RouterErrorBoundary />,
+  },
+  {
+    path: '/calendar',
+    element: (
+      <ProtectedRoute>
+        <Layout showSidebar={true}>
+          <Calendar />
         </Layout>
       </ProtectedRoute>
     ),
