@@ -2,16 +2,18 @@ import { useState } from 'react'
 import type { FC , FormEvent } from 'react'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { ConfirmationModal, PersonnelSelector, RoleSelector } from '@/components/ui'
-import { ToggleLeft, ToggleRight, Plus, Minus, Users, User } from 'lucide-react'
+import { ToggleLeft, ToggleRight, Plus, Minus, Users, User, Loader2 } from 'lucide-react'
+import { usePersonnelRoles, useAddPersonnel, useProjectDetail } from '@/hooks/useProjectDetail'
 
 interface AddPersonnelFormProps {
   isOpen: boolean
+  joNumber: string
   projectDays: any[]
   selectedDay: number | 'all'
   applyToAllDays: boolean
   setApplyToAllDays: (value: boolean) => void
-  onSave: (personnel: any) => void
   onCancel: () => void
 }
 
@@ -25,11 +27,16 @@ interface PersonnelRow {
 
 const AddPersonnelForm: FC<AddPersonnelFormProps> = ({
   isOpen,
+  joNumber,
+  projectDays,
+  selectedDay,
   applyToAllDays,
   setApplyToAllDays,
-  onSave,
   onCancel
 }) => {
+  // Hooks
+  const { data: personnelRolesData, isLoading: personnelRolesLoading } = usePersonnelRoles()
+  const addPersonnelMutation = useAddPersonnel()
   const [personnelRows, setPersonnelRows] = useState<PersonnelRow[]>([
     {
       id: '1',
@@ -106,22 +113,44 @@ const AddPersonnelForm: FC<AddPersonnelFormProps> = ({
     setShowConfirmation(true)
   }
 
-  const handleConfirmedAdd = () => {
+  const handleConfirmedAdd = async () => {
     if (pendingData.length > 0) {
-      // If multiple personnel, call onSave for each person
-      pendingData.forEach(personnel => {
-        onSave(personnel)
-      })
-      
-      // Reset form
-      setPersonnelRows([{
-        id: '1',
-        personnel_id: null,
-        role_id: null,
-        selectedPersonnel: null,
-        selectedRole: null
-      }])
-      setPendingData([])
+      try {
+        // Determine which project days to assign to
+        const targetProjectDayIds = applyToAllDays 
+          ? projectDays.map(day => day.id)
+          : selectedDay === 'all' 
+            ? projectDays.map(day => day.id)
+            : [selectedDay as number]
+
+        // Prepare personnel assignments
+        const personnel_assignments = pendingData.map(personnel => ({
+          personnel_id: personnel.personnel_id,
+          role_id: personnel.role_id
+        }))
+
+        // Call the mutation
+        await addPersonnelMutation.mutateAsync({
+          joNumber,
+          project_day_ids: targetProjectDayIds,
+          personnel_assignments
+        })
+
+        // Reset form
+        setPersonnelRows([{
+          id: '1',
+          personnel_id: null,
+          role_id: null,
+          selectedPersonnel: null,
+          selectedRole: null
+        }])
+        setPendingData([])
+        setShowConfirmation(false)
+        onCancel() // Close the modal
+      } catch (error) {
+        console.error('Error adding personnel:', error)
+        // Handle error - could show toast notification here
+      }
     }
   }
 
@@ -141,10 +170,24 @@ const AddPersonnelForm: FC<AddPersonnelFormProps> = ({
     row.personnel_id && row.role_id && row.selectedPersonnel && row.selectedRole
   )
 
+  // Loading state when personnel/roles data is loading
+  if (personnelRolesLoading) {
+    return (
+      <Modal isOpen={isOpen} onClose={handleCancel} title="Add Personnel" size="5xl">
+        <ModalBody>
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <span className="ml-2">Loading personnel data...</span>
+          </div>
+        </ModalBody>
+      </Modal>
+    )
+  }
+
   return (
     <>
       <Modal isOpen={isOpen} onClose={handleCancel} title="Add Personnel" size="5xl">
-        <ModalBody>
+        <ModalBody className='overflow-y-auto max-h-[70vh] modal-scrollbar'>
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Header */}
             <div className="flex items-center justify-between">
@@ -165,7 +208,7 @@ const AddPersonnelForm: FC<AddPersonnelFormProps> = ({
             </div>
 
             {/* Personnel Grid */}
-            <div className="space-y-6 max-h-[500px] overflow-y-auto">
+            <div className="space-y-6">
               {personnelRows.map((row, index) => (
                 <div
                   key={row.id}
@@ -299,14 +342,21 @@ const AddPersonnelForm: FC<AddPersonnelFormProps> = ({
               </Button>
               <Button 
                 onClick={handleSubmit}
-                disabled={!isFormValid}
+                disabled={!isFormValid || addPersonnelMutation.isPending}
                 className={`px-4 py-2 text-white transform hover:scale-105 transition-all duration-200 shadow-md hover:shadow-lg ${
-                  isFormValid
+                  isFormValid && !addPersonnelMutation.isPending
                     ? 'bg-blue-600 hover:bg-blue-700'
                     : 'bg-gray-400 cursor-not-allowed'
                 }`}
               >
-                Add {personnelRows.filter(row => row.personnel_id && row.role_id).length} Personnel
+                {addPersonnelMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Adding...
+                  </>
+                ) : (
+                  <>Add {personnelRows.filter(row => row.personnel_id && row.role_id).length} Personnel</>
+                )}
               </Button>
             </div>
           </div>

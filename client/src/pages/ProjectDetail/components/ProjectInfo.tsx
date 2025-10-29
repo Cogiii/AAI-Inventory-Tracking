@@ -1,44 +1,10 @@
 import type { FC } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ArrowLeft, FolderOpen, Calendar, User, AlertCircle } from 'lucide-react'
+import { ArrowLeft, FolderOpen, Calendar, User, AlertCircle, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { useProjectDetail } from '@/hooks/useProjectDetail'
 
-// Mock project data (in real app, this would come from API)
-const getProjectByJO = (joNumber: string) => {
-  const projects: Record<string, any> = {
-    'JO-2024-001': {
-      id: 1,
-      jo_number: 'JO-2024-001',
-      name: 'Metro Manila Infrastructure Development',
-      description: 'Major highway and bridge construction project covering multiple districts in Metro Manila. This comprehensive project includes road widening, bridge construction, drainage system installation, and traffic management improvements.',
-      status: 'ongoing',
-      created_by: 'John Smith',
-      created_at: '2024-09-15',
-      updated_at: '2024-10-27'
-    },
-    'JO-2024-002': {
-      id: 2,
-      jo_number: 'JO-2024-002',
-      name: 'Cebu Commercial Complex',
-      description: 'Shopping mall and office building construction in Cebu Business Park with modern amenities and sustainable design features.',
-      status: 'upcoming',
-      created_by: 'Maria Garcia',
-      created_at: '2024-10-20',
-      updated_at: '2024-10-25'
-    },
-    'JO-2024-003': {
-      id: 3,
-      jo_number: 'JO-2024-003',
-      name: 'Davao Residential Village',
-      description: 'Residential subdivision development with 150 housing units, community facilities, and green spaces.',
-      status: 'ongoing',
-      created_by: 'Robert Chen',
-      created_at: '2024-08-10',
-      updated_at: '2024-10-26'
-    }
-  }
-  return projects[joNumber] || null
-}
+
 
 interface ProjectInfoProps {
   joNumber?: string
@@ -46,6 +12,7 @@ interface ProjectInfoProps {
 
 const ProjectInfo: FC<ProjectInfoProps> = ({ joNumber }) => {
   const navigate = useNavigate()
+  const { data: projectData, isLoading, error } = useProjectDetail(joNumber)
   
   if (!joNumber) {
     return (
@@ -58,18 +25,31 @@ const ProjectInfo: FC<ProjectInfoProps> = ({ joNumber }) => {
     )
   }
 
-  const project = getProjectByJO(joNumber)
-  
-  if (!project) {
+  if (isLoading) {
     return (
       <Card className="bg-gray">
         <CardContent className="p-6 text-center">
-          <AlertCircle className="h-12 w-12 mx-auto mb-4 text-orange-500" />
-          <p className="text-gray-600">Project not found</p>
+          <Loader2 className="h-12 w-12 mx-auto mb-4 text-blue-500 animate-spin" />
+          <p className="text-gray-600">Loading project information...</p>
         </CardContent>
       </Card>
     )
   }
+  
+  if (error || !projectData) {
+    return (
+      <Card className="bg-gray">
+        <CardContent className="p-6 text-center">
+          <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
+          <p className="text-gray-600">
+            {error ? 'Error loading project information' : 'Project not found'}
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const project = projectData.project
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -144,7 +124,7 @@ const ProjectInfo: FC<ProjectInfoProps> = ({ joNumber }) => {
                 Created By
               </label>
               <p className="mt-1 text-sm text-gray-600 px-3 py-2">
-                {project.created_by}
+                {project.created_by_name || 'Unknown'}
               </p>
             </div>
           </div>
@@ -157,7 +137,7 @@ const ProjectInfo: FC<ProjectInfoProps> = ({ joNumber }) => {
           </div>
 
           <div className="text-xs text-gray-500 border-t pt-3">
-            Last updated: {formatDate(project.updated_at)}
+            Last updated: {project.updated_at ? formatDate(project.updated_at) : 'Never'}
           </div>
         </CardContent>
       </Card>

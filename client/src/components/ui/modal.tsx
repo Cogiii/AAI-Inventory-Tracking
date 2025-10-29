@@ -48,7 +48,7 @@ const Modal = React.forwardRef<HTMLDivElement, ModalProps>(
     if (!isOpen) return null
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         {/* Backdrop */}
         <div 
           className="fixed inset-0 bg-black/50 backdrop-blur-sm"
@@ -60,14 +60,15 @@ const Modal = React.forwardRef<HTMLDivElement, ModalProps>(
         <div
           ref={ref}
           className={cn(
-            "relative w-full mx-4 bg-white rounded-lg shadow-xl",
+            "relative w-full bg-white rounded-lg shadow-xl flex flex-col",
+            "max-h-[90vh] min-h-0", // Constrain to 90% of viewport height
             sizeClasses[size],
             className
           )}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Modal Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-200">
+          {/* Modal Header - Fixed */}
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
             <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
             <button
               onClick={onClose}
@@ -78,8 +79,8 @@ const Modal = React.forwardRef<HTMLDivElement, ModalProps>(
             </button>
           </div>
           
-          {/* Modal Body */}
-          <div className="p-4">
+          {/* Modal Body - Scrollable */}
+          <div className="flex-1 min-h-0 overflow-hidden">
             {children}
           </div>
         </div>
@@ -116,7 +117,7 @@ const ModalBody = React.forwardRef<HTMLDivElement, ModalBodyProps>(
   ({ children, className }, ref) => (
     <div
       ref={ref}
-      className={cn("flex-1", className)}
+      className={cn("flex-1 overflow-y-auto p-4 modal-scrollbar", className)}
     >
       {children}
     </div>
@@ -133,7 +134,7 @@ const ModalFooter = React.forwardRef<HTMLDivElement, ModalFooterProps>(
   ({ children, className }, ref) => (
     <div
       ref={ref}
-      className={cn("flex gap-3 pt-4 border-t border-gray-100 mt-4", className)}
+      className={cn("flex gap-3 p-4 border-t border-gray-100 flex-shrink-0", className)}
     >
       {children}
     </div>

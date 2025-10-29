@@ -1,100 +1,42 @@
 import type { FC } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { FileText, Activity, AlertCircle, CheckCircle, Info, Clock } from 'lucide-react'
+import { FileText, Activity, AlertCircle, CheckCircle, Info, Clock, Loader2 } from 'lucide-react'
+import { useProjectDetail } from '@/hooks/useProjectDetail'
 
-// Mock project logs data based on database schema
-const getProjectLogsByJO = (joNumber: string) => {
-  const projectLogs: Record<string, any[]> = {
-    'JO-2024-001': [
-      {
-        id: 1,
-        log_type: 'status_change',
-        description: 'Project status updated from "upcoming" to "ongoing" - Phase 1 construction officially started',
-        recorded_by: 'John Smith',
-        created_at: '2024-10-28 09:15:00',
-        project_day_id: 2
-      },
-      {
-        id: 2,
-        log_type: 'activity',
-        description: 'Equipment delivery completed - 3 concrete mixers and 2 excavators delivered to site',
-        recorded_by: 'Maria Santos',
-        created_at: '2024-10-27 14:30:00',
-        project_day_id: 1
-      },
-      {
-        id: 3,
-        log_type: 'incident',
-        description: 'Equipment malfunction reported - Excavator #2 requires immediate maintenance due to hydraulic system failure',
-        recorded_by: 'Roberto Cruz',
-        created_at: '2024-10-26 11:45:00',
-        project_day_id: 2
-      },
-      {
-        id: 4,
-        log_type: 'activity',
-        description: 'Personnel assignment updated - Added 2 additional safety officers for bridge construction phase',
-        recorded_by: 'Jennifer Lee',
-        created_at: '2024-10-25 16:20:00',
-        project_day_id: 1
-      },
-      {
-        id: 5,
-        log_type: 'status_change',
-        description: 'Day 1 activities completed successfully - Highway section A construction finished ahead of schedule',
-        recorded_by: 'John Smith',
-        created_at: '2024-10-24 18:00:00',
-        project_day_id: 1
-      }
-    ],
-    'JO-2024-002': [
-      {
-        id: 6,
-        log_type: 'activity',
-        description: 'Site preparation scheduled for November 10th - Soil testing and foundation marking completed',
-        recorded_by: 'David Kim',
-        created_at: '2024-10-27 10:30:00',
-        project_day_id: 5
-      },
-      {
-        id: 7,
-        log_type: 'status_change',
-        description: 'Project approved and moved to active status - All permits and clearances obtained',
-        recorded_by: 'Maria Garcia',
-        created_at: '2024-10-25 14:15:00',
-        project_day_id: null
-      }
-    ],
-    'JO-2024-003': [
-      {
-        id: 8,
-        log_type: 'activity',
-        description: 'Phase 2 construction initiated - Housing units foundation work started',
-        recorded_by: 'Lisa Chen',
-        created_at: '2024-10-26 08:00:00',
-        project_day_id: 9
-      },
-      {
-        id: 9,
-        log_type: 'incident',
-        description: 'Weather delay in Phase 1 Area B - Heavy rainfall caused 2-day construction postponement',
-        recorded_by: 'Pedro Gonzales',
-        created_at: '2024-10-22 16:30:00',
-        project_day_id: 8
-      }
-    ]
-  }
-  return projectLogs[joNumber] || []
-}
+
 
 interface ProjectLogsProps {
   joNumber?: string
 }
 
 const ProjectLogs: FC<ProjectLogsProps> = ({ joNumber }) => {
+  const { data: projectData, isLoading, error } = useProjectDetail(joNumber)
+  
   if (!joNumber) return null
 
-  const projectLogs = getProjectLogsByJO(joNumber)
+  if (isLoading) {
+    return (
+      <Card className="bg-gray">
+        <CardContent className="p-6 text-center">
+          <Loader2 className="h-8 w-8 mx-auto mb-4 text-blue-500 animate-spin" />
+          <p className="text-gray-600">Loading project logs...</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (error || !projectData) {
+    return (
+      <Card className="bg-gray">
+        <CardContent className="p-6 text-center">
+          <AlertCircle className="h-8 w-8 mx-auto mb-4 text-red-500" />
+          <p className="text-gray-600">Error loading project logs</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const projectLogs = projectData.logs || []
 
   const getLogIcon = (logType: string) => {
     switch (logType) {
@@ -220,7 +162,7 @@ const ProjectLogs: FC<ProjectLogsProps> = ({ joNumber }) => {
                         <div className="flex items-center justify-between text-xs">
                           <div className="flex items-center gap-4">
                             <span className="text-gray-500">
-                              <span className="font-medium">Recorded by:</span> {log.recorded_by}
+                              <span className="font-medium">Recorded by:</span> {log.recorded_by_name || 'Unknown'}
                             </span>
                             {log.project_day_id && (
                               <span className="text-gray-500">

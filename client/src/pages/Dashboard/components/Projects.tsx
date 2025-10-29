@@ -1,43 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Eye, FileText } from 'lucide-react'
-
-// Mock data for projects
-const mockProjects = [
-  {
-    id: 1,
-    joNumber: 'JO-2024-001',
-    name: 'Metro Manila Construction Project',
-    status: 'ongoing',
-    firstDay: '2024-10-15',
-    description: 'Major infrastructure development in Metro Manila area'
-  },
-  {
-    id: 2,
-    joNumber: 'JO-2024-002',
-    name: 'Cebu Commercial Building',
-    status: 'upcoming',
-    firstDay: null,
-    description: 'Commercial building construction in Cebu City'
-  },
-  {
-    id: 3,
-    joNumber: 'JO-2024-003',
-    name: 'Davao Residential Complex',
-    status: 'ongoing',
-    firstDay: '2024-09-20',
-    description: 'Residential complex development in Davao'
-  },
-  {
-    id: 4,
-    joNumber: 'JO-2024-004',
-    name: 'Baguio Bridge Construction',
-    status: 'upcoming',
-    firstDay: null,
-    description: 'Bridge construction project in Baguio City'
-  }
-]
+import { Eye, FileText, Calendar, Users } from 'lucide-react'
+import { useRecentProjects } from '@/hooks/useDashboard'
+import { Link } from 'react-router-dom'
 
 const Projects = () => {
+  const { data: projects, isLoading, error } = useRecentProjects();
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'ongoing':
@@ -53,20 +21,7 @@ const Projects = () => {
     }
   }
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return 'N/A'
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    })
-  }
 
-  const handleViewProject = (projectId: number) => {
-    // Placeholder for navigation to project details
-    console.log('View project:', projectId)
-    alert(`View project details for ID: ${projectId}`)
-  }
 
   return (
     <Card className='bg-gray'>
@@ -77,52 +32,81 @@ const Projects = () => {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {mockProjects.map((project) => (
-          <Card key={project.id} className="bg-white hover:shadow-sm transition-all duration-200">
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-3">
-                    <h3 className="font-medium text-lg text-gray-900">
-                      {project.name}
-                    </h3>
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(project.status)}`}>
-                      {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
-                    </span>
+        {isLoading ? (
+          <div className="space-y-3">
+            {[...Array(3)].map((_, index) => (
+              <Card key={index} className="bg-white">
+                <CardContent className="p-4">
+                  <div className="animate-pulse">
+                    <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                    <div className="h-3 bg-gray-200 rounded w-1/2 mb-2"></div>
+                    <div className="h-3 bg-gray-200 rounded w-3/4"></div>
                   </div>
-                  
-                  <div className="space-y-2 text-sm text-gray-600">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">JO Number:</span>
-                      <span className="font-mono bg-gray-100 px-2 py-1 rounded">
-                        {project.joNumber}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : error ? (
+          <div className="text-center py-8 text-red-500">
+            <FileText className="h-12 w-12 mx-auto mb-3 text-red-300" />
+            <p>Error loading projects</p>
+          </div>
+        ) : projects && projects.length > 0 ? (
+          projects.map((project) => (
+            <Card key={project.id} className="bg-white hover:shadow-sm transition-all duration-200">
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-3">
+                      <h3 className="font-medium text-lg text-gray-900">
+                        {project.name}
+                      </h3>
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(project.status)}`}>
+                        {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
                       </span>
                     </div>
                     
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">First Day:</span>
-                      <span>{formatDate(project.firstDay)}</span>
+                    <div className="space-y-2 text-sm text-gray-600">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">JO Number:</span>
+                        <span className="font-mono bg-gray-100 px-2 py-1 rounded">
+                          {project.jo_number}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">Created by:</span>
+                        <span>{project.creator_first_name} {project.creator_last_name}</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">Event Days:</span>
+                        <span>{project.total_days}</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">Items Allocated:</span>
+                        <span>{project.total_items_allocated}</span>
+                      </div>
+                      
+                      <p className="text-gray-700 mt-2">
+                        {project.description}
+                      </p>
                     </div>
-                    
-                    <p className="text-gray-700 mt-2">
-                      {project.description}
-                    </p>
                   </div>
+                  
+                  <Link
+                    to={`/projects/${project.id}`}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all duration-200"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    View
+                  </Link>
                 </div>
-                
-                <button
-                  onClick={() => handleViewProject(project.id)}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all duration-200"
-                >
-                  <Eye className="h-3.5 w-3.5" />
-                  View
-                </button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-        
-        {mockProjects.length === 0 && (
+              </CardContent>
+            </Card>
+          ))
+        ) : (
           <div className="text-center py-8 text-gray-500">
             <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
             <p>No projects found</p>

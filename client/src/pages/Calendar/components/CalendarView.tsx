@@ -1,73 +1,17 @@
 import { useState, useMemo } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, AlertCircle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import EventDetailModal from './EventDetailModal'
-
-// Mock project data with events (this would come from your API)
-const mockProjectEvents = [
-  {
-    id: 1,
-    jo_number: 'JO-2024-001',
-    name: 'Metro Manila Infrastructure',
-    project_days: [
-      { date: '2025-01-01', location: 'EDSA Makati' },
-      { date: '2025-01-03', location: 'EDSA Ortigas' },
-      { date: '2025-01-09', location: 'BGC Taguig' },
-      { date: '2025-01-12', location: 'Makati CBD' },
-      { date: '2025-01-15', location: 'Ortigas Center' },
-      { date: '2025-01-21', location: 'Alabang' },
-      { date: '2025-01-22', location: 'QC Triangle' },
-      { date: '2025-01-30', location: 'Mandaluyong' },
-      { date: '2025-01-31', location: 'Final Inspection' }
-    ],
-    status: 'ongoing'
-  },
-  {
-    id: 2,
-    jo_number: 'JO-2024-002',
-    name: 'Cebu Commercial Complex',
-    project_days: [
-      { date: '2025-01-07', location: 'Site Preparation' },
-      { date: '2025-01-14', location: 'Foundation Work' },
-      { date: '2025-01-28', location: 'Structural Work' }
-    ],
-    status: 'upcoming'
-  },
-  {
-    id: 3,
-    jo_number: 'JO-2024-003',
-    name: 'Davao Residential Village',
-    project_days: [
-      { date: '2025-01-16', location: 'Phase 1 Area A' },
-      { date: '2025-01-17', location: 'Phase 1 Area B' },
-      { date: '2025-01-23', location: 'Phase 2 Planning' }
-    ],
-    status: 'ongoing'
-  },
-  {
-    id: 4,
-    jo_number: 'JO-2024-004',
-    name: 'Baguio Tourism Center',
-    project_days: [
-      { date: '2025-01-02', location: 'Session Road' },
-      { date: '2025-01-10', location: 'Main Building' }
-    ],
-    status: 'completed'
-  }
-]
+import { useCalendarViewEvents } from '@/hooks/useCalendar'
+import Loader from '@/components/ui/Loader'
 
 const CalendarView = () => {
   const navigate = useNavigate()
-  const [currentDate, setCurrentDate] = useState(new Date(2025, 0, 1)) // January 2025
-  const [selectedEvent, setSelectedEvent] = useState<{
-    id: number
-    jo_number: string
-    name: string
-    status: string
-    location: string
-  } | null>(null)
-  const [showEventModal, setShowEventModal] = useState(false)
+  const [currentDate, setCurrentDate] = useState(new Date())
+
+  // Fetch calendar events for the current view
+  const { data: calendarEventsResponse, isLoading, error } = useCalendarViewEvents(currentDate)
+  const projectEvents = calendarEventsResponse?.data || []
 
   // Generate calendar data
   const calendarData = useMemo(() => {
@@ -76,10 +20,9 @@ const CalendarView = () => {
 
     const firstDayOfMonth = new Date(year, month, 1)
     const lastDayOfMonth = new Date(year, month + 1, 0)
-    const firstDayWeekday = firstDayOfMonth.getDay() // 0 = Sunday
+    const firstDayWeekday = firstDayOfMonth.getDay()
     const daysInMonth = lastDayOfMonth.getDate()
 
-    // Create calendar grid (6 weeks x 7 days = 42 cells)
     const calendarDays = []
 
     // Add empty cells for days before month starts
@@ -101,7 +44,7 @@ const CalendarView = () => {
         location: string
       }> = []
 
-      mockProjectEvents.forEach(project => {
+      projectEvents.forEach(project => {
         project.project_days.forEach(projectDay => {
           if (projectDay.date === dateString) {
             dayEvents.push({
@@ -127,7 +70,7 @@ const CalendarView = () => {
       monthName: firstDayOfMonth.toLocaleDateString('en-US', { month: 'long' }),
       year: year
     }
-  }, [currentDate])
+  }, [currentDate, projectEvents])
 
   const navigateMonth = (direction: 'prev' | 'next') => {
     setCurrentDate(prev => {
@@ -141,19 +84,8 @@ const CalendarView = () => {
     })
   }
 
-  const handleEventClick = (event: any, isMobile = false) => {
-    if (isMobile || window.innerWidth < 768) {
-      // On mobile, show modal first
-      setSelectedEvent(event)
-      setShowEventModal(true)
-    } else {
-      // On desktop, navigate directly
-      navigate(`/project/${event.jo_number}`)
-    }
-  }
-
-  const handleViewProject = (joNumber: string) => {
-    navigate(`/project/${joNumber}`)
+  const handleEventClick = (event: any) => {
+    navigate(`/project/${event.jo_number}`)
   }
 
   const getEventColor = (status: string, index: number) => {
@@ -179,6 +111,42 @@ const CalendarView = () => {
   }
 
   const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Card className="bg-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-center h-96">
+              <Loader />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <Card className="bg-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-center h-96 text-red-600">
+              <div className="text-center">
+                <AlertCircle className="h-12 w-12 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Failed to load calendar events</h3>
+                <p className="text-sm text-gray-600">
+                  {error instanceof Error ? error.message : 'An error occurred while fetching calendar data.'}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -267,8 +235,8 @@ const CalendarView = () => {
                     <>
                       {/* Day Number */}
                       <div className={`text-sm font-medium mb-1 ${isToday
-                          ? 'bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs'
-                          : 'text-gray-900'
+                        ? 'bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs'
+                        : 'text-gray-900'
                         }`}>
                         {day.date}
                       </div>
@@ -280,7 +248,7 @@ const CalendarView = () => {
                             key={`${event.id}-${eventIndex}`}
                             onClick={() => handleEventClick(event)}
                             title={`${event.name} - ${event.location}`}
-                            className={`w-full text-left px-1.5 py-0.5 rounded text-xs font-medium truncate transition-all duration-200 hover:shadow-sm hover:scale-[1.02] hover:z-10 relative ${getEventColor(event.status, eventIndex)}`}
+                            className={`w-full text-left px-1.5 py-0.5 rounded text-xs font-medium truncate transition-all duration-200 hover:shadow-md hover:-translate-y-[3px] hover:brightness-95 hover:z-10 relative will-change-transform ${getEventColor(event.status, eventIndex)}`}
                           >
                             {event.name}
                           </button>
@@ -315,17 +283,6 @@ const CalendarView = () => {
           </div>
         </CardContent>
       </Card>
-
-      {/* Event Detail Modal */}
-      <EventDetailModal
-        isOpen={showEventModal}
-        onClose={() => {
-          setShowEventModal(false)
-          setSelectedEvent(null)
-        }}
-        event={selectedEvent}
-        onViewProject={handleViewProject}
-      />
     </div>
   )
 }

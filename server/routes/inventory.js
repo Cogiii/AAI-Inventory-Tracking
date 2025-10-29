@@ -1,117 +1,212 @@
 const express = require('express');
-const { v4: uuidv4 } = require('uuid');
 const { auth, authorize } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
+const { pool } = require('../config/database');
 
 const router = express.Router();
 
-// Mock inventory store (replace with database later)
-const mockInventory = [
-  {
-    id: uuidv4(),
-    name: 'Laptop',
-    description: 'High-performance business laptop',
-    category: 'Electronics',
-    quantity: 50,
-    price: 999.99,
-    sku: 'LAP001',
-    location: 'Warehouse A',
-    minStockLevel: 10,
-    supplier: 'Tech Corp',
-    status: 'active',
-    createdAt: '2025-09-01T10:00:00.000Z',
-    updatedAt: '2025-09-01T10:00:00.000Z',
-    createdBy: 'admin'
-  },
-  {
-    id: uuidv4(),
-    name: 'Office Chair',
-    description: 'Ergonomic office chair with lumbar support',
-    category: 'Furniture',
-    quantity: 25,
-    price: 299.99,
-    sku: 'CHR001',
-    location: 'Warehouse B',
-    minStockLevel: 5,
-    supplier: 'Furniture Plus',
-    status: 'active',
-    createdAt: '2025-09-02T14:30:00.000Z',
-    updatedAt: '2025-09-02T14:30:00.000Z',
-    createdBy: 'admin'
+// @route   GET /api/inventory/test-data
+// @desc    Test endpoint to check database connectivity and data
+// @access  Public (for testing purposes)
+router.get('/test-data', async (req, res) => {
+  try {
+    console.log('Test data endpoint called');
+
+    // Test brands
+    const [brands] = await pool.execute(`
+      SELECT COUNT(*) as brand_count FROM brand
+    `);
+
+    const [brandsSample] = await pool.execute(`
+      SELECT id, name FROM brand LIMIT 5
+    `);
+
+    // Test locations
+    const [locations] = await pool.execute(`
+      SELECT COUNT(*) as location_count FROM location
+    `);
+
+    const [locationsSample] = await pool.execute(`
+      SELECT id, name, type FROM location LIMIT 5
+    `);
+
+    // Test warehouse and office locations specifically
+    const [warehouses] = await pool.execute(`
+      SELECT COUNT(*) as warehouse_count FROM location WHERE type = 'warehouse'
+    `);
+
+    const [offices] = await pool.execute(`
+      SELECT COUNT(*) as office_count FROM location WHERE type = 'office'
+    `);
+
+    const [warehousesAndOfficesSample] = await pool.execute(`
+      SELECT id, name, type, city FROM location WHERE type IN ('warehouse', 'office') ORDER BY type ASC, name ASC
+    `);
+
+    res.json({
+      success: true,
+      message: 'Test data retrieved successfully',
+      data: {
+        brands: {
+          total: brands[0].brand_count,
+          sample: brandsSample
+        },
+        locations: {
+          total: locations[0].location_count,
+          sample: locationsSample
+        },
+        warehouses: {
+          total: warehouses[0].warehouse_count,
+          sample: warehousesAndOfficesSample.filter(loc => loc.type === 'warehouse')
+        },
+        offices: {
+          total: offices[0].office_count,
+          sample: warehousesAndOfficesSample.filter(loc => loc.type === 'office')
+        },
+        warehousesAndOffices: {
+          total: warehouses[0].warehouse_count + offices[0].office_count,
+          sample: warehousesAndOfficesSample
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Test data error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error retrieving test data',
+      details: error.message
+    });
   }
-];
+});
 
 // @route   GET /api/inventory
 // @desc    Get all inventory items with pagination and filtering
 // @access  Private
 router.get('/', auth, validate(schemas.paginationQuery, 'query'), async (req, res) => {
   try {
-    const { page, limit, sort, order, search, category } = req.query;
-    
-    let filteredInventory = [...mockInventory];
+    const { page: pageStr, limit: limitStr, sort, order, search, type, brand, location, status } = req.query;
+
+    // Convert string parameters to integers
+    const page = parseInt(pageStr) || 1;
+    const limit = parseInt(limitStr) || 10;
+
+    let whereClause = 'WHERE 1=1';
+    const queryParams = [];
 
     // Apply search filter
     if (search) {
-      const searchLower = search.toLowerCase();
-      filteredInventory = filteredInventory.filter(item =>
-        item.name.toLowerCase().includes(searchLower) ||
-        item.description.toLowerCase().includes(searchLower) ||
-        item.sku.toLowerCase().includes(searchLower) ||
-        item.supplier.toLowerCase().includes(searchLower)
-      );
+      whereClause += ' AND (i.name LIKE ? OR i.description LIKE ? OR b.name LIKE ? OR l.name LIKE ?)';
+      const searchTerm = `%${search}%`;
+      queryParams.push(searchTerm, searchTerm, searchTerm, searchTerm);
     }
 
-    // Apply category filter
-    if (category) {
-      filteredInventory = filteredInventory.filter(item =>
-        item.category.toLowerCase() === category.toLowerCase()
-      );
+    // Apply type filter
+    if (type && type !== 'all') {
+      whereClause += ' AND i.type = ?';
+      queryParams.push(type);
     }
 
-    // Apply sorting
-    filteredInventory.sort((a, b) => {
-      let aValue = a[sort];
-      let bValue = b[sort];
-
-      // Handle date sorting
-      if (sort === 'createdAt' || sort === 'updatedAt') {
-        aValue = new Date(aValue);
-        bValue = new Date(bValue);
-      }
-
-      if (order === 'asc') {
-        return aValue > bValue ? 1 : -1;
+    // Apply brand filter
+    if (brand && brand !== 'all') {
+      if (brand === 'no_brand') {
+        whereClause += ' AND i.brand_id IS NULL';
       } else {
-        return aValue < bValue ? 1 : -1;
+        whereClause += ' AND b.name = ?';
+        queryParams.push(brand);
       }
-    });
+    }
 
-    // Apply pagination
-    const startIndex = (page - 1) * limit;
-    const endIndex = page * limit;
-    const paginatedItems = filteredInventory.slice(startIndex, endIndex);
+    // Apply location filter
+    if (location && location !== 'all') {
+      whereClause += ' AND l.name = ?';
+      queryParams.push(location);
+    }
 
-    // Calculate pagination info
-    const totalItems = filteredInventory.length;
+    // Apply status filter
+    if (status && status !== 'all') {
+      switch (status) {
+        case 'low_stock':
+          whereClause += ' AND i.available_quantity > 0 AND i.available_quantity <= 10';
+          break;
+        case 'out_of_stock':
+          whereClause += ' AND i.available_quantity = 0';
+          break;
+        case 'active':
+          whereClause += ' AND i.available_quantity > 10';
+          break;
+        case 'inactive':
+          whereClause += ' AND i.status = ?';
+          queryParams.push('inactive');
+          break;
+      }
+    }
+
+    // Build ORDER BY clause
+    const validSortColumns = {
+      'name': 'i.name',
+      'type': 'i.type',
+      'available_quantity': 'i.available_quantity',
+      'delivered_quantity': 'i.delivered_quantity',
+      'created_at': 'i.created_at',
+      'updated_at': 'i.updated_at'
+    };
+
+    const sortColumn = validSortColumns[sort] || 'i.created_at';
+    const sortOrder = order === 'asc' ? 'ASC' : 'DESC';
+
+    // Count total items for pagination
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM item i
+      LEFT JOIN brand b ON i.brand_id = b.id
+      LEFT JOIN location l ON i.warehouse_location_id = l.id
+      ${whereClause}
+    `;
+
+    const [countResult] = await pool.execute(countQuery, queryParams);
+    const totalItems = countResult[0].total;
     const totalPages = Math.ceil(totalItems / limit);
-    const hasNextPage = endIndex < totalItems;
-    const hasPreviousPage = startIndex > 0;
+
+    // Main query with pagination - simplified approach
+    const offset = (page - 1) * limit;
+
+    // Let's build the query step by step without parameterized LIMIT/OFFSET
+    let baseQuery = `
+      SELECT 
+        i.*,
+        b.name as brand_name,
+        l.name as warehouse_location_name
+      FROM item i
+      LEFT JOIN brand b ON i.brand_id = b.id
+      LEFT JOIN location l ON i.warehouse_location_id = l.id
+      ${whereClause}
+      ORDER BY ${sortColumn} ${sortOrder}
+    `;
+
+    // Add LIMIT and OFFSET directly to avoid parameter issues
+    const finalQuery = `${baseQuery} LIMIT ${limit} OFFSET ${offset}`;
+
+    // console.log('Final Query:', finalQuery);
+    // console.log('Query Params for WHERE clause:', queryParams);
+
+    const [items] = await pool.execute(finalQuery, queryParams);
 
     res.json({
       success: true,
       data: {
-        items: paginatedItems,
+        items,
         pagination: {
           currentPage: page,
           totalPages,
           totalItems,
           itemsPerPage: limit,
-          hasNextPage,
-          hasPreviousPage
+          hasNextPage: page < totalPages,
+          hasPreviousPage: page > 1
         },
         filters: {
           search,
-          category,
+          type,
           sort,
           order
         }
@@ -127,16 +222,275 @@ router.get('/', auth, validate(schemas.paginationQuery, 'query'), async (req, re
   }
 });
 
+// @route   GET /api/inventory/stats
+// @desc    Get inventory statistics
+// @access  Private
+router.get('/stats', auth, async (req, res) => {
+  try {
+    const [totalItemsResult] = await pool.execute(
+      'SELECT COUNT(*) as total FROM item'
+    );
+
+    const [typeCountsResult] = await pool.execute(
+      `SELECT type, COUNT(*) as count 
+       FROM item 
+       GROUP BY type`
+    );
+
+    const [quantitiesResult] = await pool.execute(
+      `SELECT 
+        SUM(delivered_quantity) as total_delivered,
+        SUM(available_quantity) as total_available,
+        SUM(damaged_quantity) as total_damaged,
+        SUM(lost_quantity) as total_lost
+       FROM item`
+    );
+
+    const typeCounts = {};
+    typeCountsResult.forEach(row => {
+      typeCounts[row.type] = row.count;
+    });
+
+    res.json({
+      success: true,
+      data: {
+        totalItems: totalItemsResult[0].total,
+        typeCounts,
+        quantities: quantitiesResult[0]
+      }
+    });
+
+  } catch (error) {
+    console.error('Get stats error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error fetching statistics'
+    });
+  }
+});
+
+// @route   GET /api/inventory/brands
+// @desc    Get all brands for dropdown
+// @access  Private
+router.get('/brands', auth, async (req, res) => {
+  try {
+    const [brands] = await pool.execute(
+      'SELECT id, name FROM brand ORDER BY name'
+    );
+
+    res.json({
+      success: true,
+      data: {
+        brands
+      }
+    });
+
+  } catch (error) {
+    console.error('Get brands error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error fetching brands'
+    });
+  }
+});
+
+// @route   GET /api/inventory/locations
+// @desc    Get all warehouse locations for dropdown
+// @access  Private
+router.get('/locations', auth, async (req, res) => {
+  try {
+    const [locations] = await pool.execute(
+      `SELECT id, name, city, province 
+        FROM location 
+        WHERE type IN ('warehouse', 'office') 
+          AND is_active = 1 
+        ORDER BY name`
+    );
+
+    res.json({
+      success: true,
+      data: {
+        locations
+      }
+    });
+
+  } catch (error) {
+    console.error('Get locations error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error fetching locations'
+    });
+  }
+});
+
+// @route   GET /api/inventory/export/excel
+// @desc    Export inventory items to Excel based on filters
+// @access  Private
+router.get('/export/excel', auth, validate(schemas.paginationQuery, 'query'), async (req, res) => {
+  try {
+    const { sort, order, search, type, brand, location, status } = req.query;
+
+    // Convert string parameters to proper types
+    let whereClause = 'WHERE 1=1';
+    const queryParams = [];
+
+    // Apply search filter
+    if (search) {
+      whereClause += ' AND (i.name LIKE ? OR i.description LIKE ? OR b.name LIKE ? OR l.name LIKE ?)';
+      const searchTerm = `%${search}%`;
+      queryParams.push(searchTerm, searchTerm, searchTerm, searchTerm);
+    }
+
+    // Apply type filter
+    if (type && type !== 'all') {
+      whereClause += ' AND i.type = ?';
+      queryParams.push(type);
+    }
+
+    // Apply brand filter
+    if (brand && brand !== 'all') {
+      if (brand === 'no_brand') {
+        whereClause += ' AND i.brand_id IS NULL';
+      } else {
+        whereClause += ' AND b.name = ?';
+        queryParams.push(brand);
+      }
+    }
+
+    // Apply location filter
+    if (location && location !== 'all') {
+      whereClause += ' AND l.name = ?';
+      queryParams.push(location);
+    }
+
+    // Apply status filter
+    if (status && status !== 'all') {
+      switch (status) {
+        case 'low_stock':
+          whereClause += ' AND i.available_quantity > 0 AND i.available_quantity <= 10';
+          break;
+        case 'out_of_stock':
+          whereClause += ' AND i.available_quantity = 0';
+          break;
+        case 'active':
+          whereClause += ' AND i.available_quantity > 10';
+          break;
+        case 'inactive':
+          whereClause += ' AND i.status = ?';
+          queryParams.push('inactive');
+          break;
+      }
+    }
+
+    // Build ORDER BY clause
+    const validSortColumns = {
+      'name': 'i.name',
+      'type': 'i.type',
+      'available_quantity': 'i.available_quantity',
+      'delivered_quantity': 'i.delivered_quantity',
+      'created_at': 'i.created_at',
+      'updated_at': 'i.updated_at'
+    };
+
+    const sortColumn = validSortColumns[sort] || 'i.created_at';
+    const sortOrder = order === 'asc' ? 'ASC' : 'DESC';
+
+    // Export query - get all items (no pagination for export)
+    const exportQuery = `
+      SELECT 
+        i.id,
+        i.type,
+        b.name as brand_name,
+        i.name,
+        i.description,
+        i.delivered_quantity,
+        i.damaged_quantity,
+        i.lost_quantity,
+        i.available_quantity,
+        l.name as warehouse_location_name,
+        i.status,
+        DATE_FORMAT(i.created_at, '%Y-%m-%d %H:%i:%s') as created_at,
+        DATE_FORMAT(i.updated_at, '%Y-%m-%d %H:%i:%s') as updated_at
+      FROM item i
+      LEFT JOIN brand b ON i.brand_id = b.id
+      LEFT JOIN location l ON i.warehouse_location_id = l.id
+      ${whereClause}
+      ORDER BY ${sortColumn} ${sortOrder}
+    `;
+
+    const [items] = await pool.execute(exportQuery, queryParams);
+
+    // Import xlsx dynamically
+    const XLSX = require('xlsx');
+
+    // Create workbook and worksheet
+    const workbook = XLSX.utils.book_new();
+
+    // Prepare data for Excel
+    const excelData = items.map(item => ({
+      'ID': item.id,
+      'Type': item.type,
+      'Brand': item.brand_name || 'No Brand',
+      'Name': item.name,
+      'Description': item.description || '',
+      'Delivered Quantity': item.delivered_quantity,
+      'Damaged Quantity': item.damaged_quantity,
+      'Lost Quantity': item.lost_quantity,
+      'Available Quantity': item.available_quantity,
+      'Warehouse Location': item.warehouse_location_name || '',
+      'Status': item.status || 'active',
+      'Created At': item.created_at,
+      'Updated At': item.updated_at
+    }));
+
+    // Create worksheet
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Inventory Items');
+
+    // Generate Excel buffer
+    const excelBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    // Set headers for file download
+    const filename = `inventory_export_${new Date().toISOString().split('T')[0]}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', excelBuffer.length);
+
+    // Send the file
+    res.send(excelBuffer);
+
+  } catch (error) {
+    console.error('Export Excel error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error exporting inventory'
+    });
+  }
+});
+
 // @route   GET /api/inventory/:id
 // @desc    Get single inventory item
 // @access  Private
 router.get('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
-    
-    const item = mockInventory.find(item => item.id === id);
-    
-    if (!item) {
+
+    const query = `
+      SELECT 
+        i.*,
+        b.name as brand_name,
+        l.name as warehouse_location_name
+      FROM item i
+      LEFT JOIN brand b ON i.brand_id = b.id
+      LEFT JOIN location l ON i.warehouse_location_id = l.id
+      WHERE i.id = ?
+    `;
+
+    const [rows] = await pool.execute(query, [id]);
+
+    if (rows.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'Inventory item not found'
@@ -146,7 +500,7 @@ router.get('/:id', auth, async (req, res) => {
     res.json({
       success: true,
       data: {
-        item
+        item: rows[0]
       }
     });
 
@@ -164,43 +518,69 @@ router.get('/:id', auth, async (req, res) => {
 // @access  Private (Manager/Admin)
 router.post('/', auth, authorize('manager', 'admin'), validate(schemas.createInventoryItem), async (req, res) => {
   try {
-    const { name, description, category, quantity, price, sku, location, minStockLevel, supplier } = req.body;
-
-    // Check if SKU already exists
-    const existingItem = mockInventory.find(item => item.sku === sku);
-    if (existingItem) {
-      return res.status(400).json({
-        success: false,
-        error: 'SKU already exists'
-      });
-    }
-
-    // Create new inventory item
-    const newItem = {
-      id: uuidv4(),
+    const {
+      type,
+      brand_id,
       name,
-      description: description || '',
-      category,
-      quantity,
-      price,
-      sku,
-      location: location || '',
-      minStockLevel: minStockLevel || 0,
-      supplier: supplier || '',
-      status: 'active',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      createdBy: req.user.id
-    };
+      description,
+      delivered_quantity,
+      damaged_quantity,
+      lost_quantity,
+      available_quantity,
+      warehouse_location_id,
+      status
+    } = req.body;
 
-    // Add to mock store
-    mockInventory.push(newItem);
+    // Insert new inventory item
+    const insertQuery = `
+      INSERT INTO item (
+        type, 
+        brand_id, 
+        name, 
+        description, 
+        delivered_quantity, 
+        damaged_quantity, 
+        lost_quantity, 
+        available_quantity, 
+        warehouse_location_id, 
+        status,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+    `;
+
+    const [result] = await pool.execute(insertQuery, [
+      type,
+      brand_id || null,
+      name,
+      description || null,
+      delivered_quantity || 0,
+      damaged_quantity || 0,
+      lost_quantity || 0,
+      available_quantity || 0,
+      warehouse_location_id || null,
+      status || null
+    ]);
+
+    // Fetch the created item with related data
+    const fetchQuery = `
+      SELECT 
+        i.*,
+        b.name as brand_name,
+        l.name as warehouse_location_name
+      FROM item i
+      LEFT JOIN brand b ON i.brand_id = b.id
+      LEFT JOIN location l ON i.warehouse_location_id = l.id
+      WHERE i.id = ?
+    `;
+
+    const [rows] = await pool.execute(fetchQuery, [result.insertId]);
 
     res.status(201).json({
       success: true,
       message: 'Inventory item created successfully',
       data: {
-        item: newItem
+        item: rows[0]
       }
     });
 
@@ -221,40 +601,71 @@ router.put('/:id', auth, authorize('manager', 'admin'), validate(schemas.updateI
     const { id } = req.params;
     const updates = req.body;
 
-    const itemIndex = mockInventory.findIndex(item => item.id === id);
-    
-    if (itemIndex === -1) {
+    // Check if item exists
+    const [existingRows] = await pool.execute('SELECT id FROM item WHERE id = ?', [id]);
+
+    if (existingRows.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'Inventory item not found'
       });
     }
 
-    // Check if SKU is being changed and if it already exists
-    if (updates.sku && updates.sku !== mockInventory[itemIndex].sku) {
-      const existingItem = mockInventory.find(item => item.sku === updates.sku && item.id !== id);
-      if (existingItem) {
-        return res.status(400).json({
-          success: false,
-          error: 'SKU already exists'
-        });
+    // Build update query dynamically
+    const updateFields = [];
+    const updateValues = [];
+
+    const allowedFields = [
+      'type', 'brand_id', 'name', 'description', 'delivered_quantity',
+      'damaged_quantity', 'lost_quantity', 'available_quantity',
+      'warehouse_location_id', 'status'
+    ];
+
+    allowedFields.forEach(field => {
+      if (updates.hasOwnProperty(field)) {
+        updateFields.push(`${field} = ?`);
+        updateValues.push(updates[field]);
       }
+    });
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No valid fields to update'
+      });
     }
 
-    // Update item
-    const updatedItem = {
-      ...mockInventory[itemIndex],
-      ...updates,
-      updatedAt: new Date().toISOString()
-    };
+    // Add updated_at timestamp
+    updateFields.push('updated_at = NOW()');
+    updateValues.push(id);
 
-    mockInventory[itemIndex] = updatedItem;
+    const updateQuery = `
+      UPDATE item 
+      SET ${updateFields.join(', ')} 
+      WHERE id = ?
+    `;
+
+    await pool.execute(updateQuery, updateValues);
+
+    // Fetch the updated item with related data
+    const fetchQuery = `
+      SELECT 
+        i.*,
+        b.name as brand_name,
+        l.name as warehouse_location_name
+      FROM item i
+      LEFT JOIN brand b ON i.brand_id = b.id
+      LEFT JOIN location l ON i.warehouse_location_id = l.id
+      WHERE i.id = ?
+    `;
+
+    const [rows] = await pool.execute(fetchQuery, [id]);
 
     res.json({
       success: true,
       message: 'Inventory item updated successfully',
       data: {
-        item: updatedItem
+        item: rows[0]
       }
     });
 
@@ -273,24 +684,34 @@ router.put('/:id', auth, authorize('manager', 'admin'), validate(schemas.updateI
 router.delete('/:id', auth, authorize('admin'), async (req, res) => {
   try {
     const { id } = req.params;
-    
-    const itemIndex = mockInventory.findIndex(item => item.id === id);
-    
-    if (itemIndex === -1) {
+
+    // Check if item exists and get its data before deleting
+    const [existingRows] = await pool.execute(`
+      SELECT 
+        i.*,
+        b.name as brand_name,
+        l.name as warehouse_location_name
+      FROM item i
+      LEFT JOIN brand b ON i.brand_id = b.id
+      LEFT JOIN location l ON i.warehouse_location_id = l.id
+      WHERE i.id = ?
+    `, [id]);
+
+    if (existingRows.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'Inventory item not found'
       });
     }
 
-    // Remove item from mock store
-    const deletedItem = mockInventory.splice(itemIndex, 1)[0];
+    // Delete the item
+    await pool.execute('DELETE FROM item WHERE id = ?', [id]);
 
     res.json({
       success: true,
       message: 'Inventory item deleted successfully',
       data: {
-        deletedItem
+        deletedItem: existingRows[0]
       }
     });
 
@@ -303,83 +724,78 @@ router.delete('/:id', auth, authorize('admin'), async (req, res) => {
   }
 });
 
-// @route   GET /api/inventory/low-stock
-// @desc    Get items with low stock
+// @route   GET /api/inventory/brands
+// @desc    Get all brands for dropdown
 // @access  Private
-router.get('/alerts/low-stock', auth, async (req, res) => {
+router.get('/brands', auth, async (req, res) => {
   try {
-    const lowStockItems = mockInventory.filter(item => 
-      item.quantity <= item.minStockLevel && item.status === 'active'
-    );
+    console.log('Brands endpoint called');
+    const [rows] = await pool.execute(`
+      SELECT 
+        b.id, 
+        b.name,
+        b.description
+      FROM brand b
+      WHERE b.name IS NOT NULL
+      ORDER BY b.name ASC
+    `);
+
+    console.log('Brands query result:', rows);
 
     res.json({
       success: true,
+      message: 'Brands retrieved successfully',
       data: {
-        items: lowStockItems,
-        count: lowStockItems.length
+        brands: rows
       }
     });
 
   } catch (error) {
-    console.error('Low stock check error:', error);
+    console.error('Get brands error:', error);
     res.status(500).json({
       success: false,
-      error: 'Server error checking low stock'
+      error: 'Server error retrieving brands',
+      details: error.message
     });
   }
 });
 
-// @route   GET /api/inventory/categories
-// @desc    Get all unique categories
+// @route   GET /api/inventory/locations
+// @desc    Get all warehouse and office locations for dropdown
 // @access  Private
-router.get('/meta/categories', auth, async (req, res) => {
+router.get('/locations', auth, async (req, res) => {
   try {
-    const categories = [...new Set(mockInventory.map(item => item.category))];
+    console.log('Locations endpoint called');
+    const [rows] = await pool.execute(`
+      SELECT 
+        l.id, 
+        l.name,
+        l.type,
+        l.city,
+        l.province
+      FROM location l
+      WHERE l.type IN ('warehouse', 'office')
+        AND l.name IS NOT NULL 
+        AND l.is_active = TRUE
+      ORDER BY l.type ASC, l.name ASC
+    `);
+
+    console.log('Locations query result:', rows);
 
     res.json({
       success: true,
+      message: 'Warehouse and office locations retrieved successfully',
       data: {
-        categories: categories.sort()
+        locations: rows
       }
     });
 
   } catch (error) {
-    console.error('Get categories error:', error);
+    console.error('Get locations error:', error);
     res.status(500).json({
       success: false,
-      error: 'Server error fetching categories'
-    });
-  }
-});
-
-// @route   GET /api/inventory/stats
-// @desc    Get inventory statistics
-// @access  Private
-router.get('/meta/stats', auth, async (req, res) => {
-  try {
-    const totalItems = mockInventory.length;
-    const totalValue = mockInventory.reduce((sum, item) => sum + (item.quantity * item.price), 0);
-    const lowStockItems = mockInventory.filter(item => item.quantity <= item.minStockLevel).length;
-    const categoryCounts = mockInventory.reduce((acc, item) => {
-      acc[item.category] = (acc[item.category] || 0) + 1;
-      return acc;
-    }, {});
-
-    res.json({
-      success: true,
-      data: {
-        totalItems,
-        totalValue: parseFloat(totalValue.toFixed(2)),
-        lowStockItems,
-        categoryCounts
-      }
-    });
-
-  } catch (error) {
-    console.error('Get stats error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Server error fetching statistics'
+      error: 'Server error retrieving locations',
+      details: error.message
     });
   }
 });

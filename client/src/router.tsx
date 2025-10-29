@@ -14,9 +14,7 @@ import {
   Calendar,
   InventoryPage,
   ItemDetails,
-  AnalyticsPage,
   UsersPage,
-  SettingsPage
 } from './pages';
 
 export const router = createBrowserRouter([
@@ -110,17 +108,6 @@ export const router = createBrowserRouter([
     errorElement: <RouterErrorBoundary />,
   },
   {
-    path: '/analytics',
-    element: (
-      <ProtectedRoute>
-        <Layout showSidebar={true}>
-          <AnalyticsPage />
-        </Layout>
-      </ProtectedRoute>
-    ),
-    errorElement: <RouterErrorBoundary />,
-  },
-  {
     path: '/users',
     element: (
       <ProtectedRoute requiredRoles={['Administrator', 'Marketing Manager']}>
@@ -131,18 +118,6 @@ export const router = createBrowserRouter([
     ),
     errorElement: <RouterErrorBoundary />,
   },
-  {
-    path: '/settings',
-    element: (
-      <ProtectedRoute>
-        <Layout showSidebar={true}>
-          <SettingsPage />
-        </Layout>
-      </ProtectedRoute>
-    ),
-    errorElement: <RouterErrorBoundary />,
-  },
-
   // Catch all route
   {
     path: '*',

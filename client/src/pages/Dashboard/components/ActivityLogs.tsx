@@ -5,72 +5,10 @@ import {
   CheckCircle,
   Edit3
 } from 'lucide-react'
-
-// Mock data for activity logs
-const mockActivityLogs = [
-  {
-    id: 1,
-    user: 'Laurence Devera',
-    userInitials: 'LD',
-    action: 'approved',
-    entity: 'Stock Batch',
-    description: 'approved Stock Batch ID #18576',
-    timestamp: '2024-10-25T09:30:00Z',
-    type: 'approval'
-  },
-  {
-    id: 2,
-    user: 'Laurence Devera',
-    userInitials: 'LD',
-    action: 'confirmed',
-    entity: 'delivery for Stock Batch',
-    description: 'confirmed delivery for Stock Batch ID #18570',
-    timestamp: '2024-10-25T08:54:00Z',
-    type: 'confirmation'
-  },
-  {
-    id: 3,
-    user: 'Karsten Cabico',
-    userInitials: 'KC',
-    action: 'moved',
-    entity: 'blah blah blah blah bla',
-    description: 'moved blah blah blah blah bla',
-    timestamp: '2024-10-25T08:34:00Z',
-    type: 'update'
-  },
-  {
-    id: 4,
-    user: 'Laurence Khael',
-    userInitials: 'LK',
-    action: 'moved',
-    entity: 'blah blah blah blah bla',
-    description: 'moved blah blah blah blah bla',
-    timestamp: '2024-10-25T08:34:00Z',
-    type: 'update'
-  },
-  {
-    id: 5,
-    user: 'Anna Beatriz',
-    userInitials: 'AB',
-    action: 'moved',
-    entity: 'blah blah blah blah bla',
-    description: 'moved blah blah blah blah bla',
-    timestamp: '2024-10-25T08:34:00Z',
-    type: 'update'
-  },
-  {
-    id: 6,
-    user: 'Kevin Cruz',
-    userInitials: 'KC',
-    action: 'moved',
-    entity: 'blah blah blah blah bla',
-    description: 'moved blah blah blah blah bla',
-    timestamp: '2024-10-25T08:34:00Z',
-    type: 'update'
-  }
-]
-
+import { useActivityLogs } from '@/hooks/useDashboard'
+  
 const ActivityLogs = () => {
+  const { data: logs, isLoading, error } = useActivityLogs();
   const getActivityIcon = (type: string) => {
     switch (type) {
       case 'approval':
@@ -102,35 +40,63 @@ const ActivityLogs = () => {
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {mockActivityLogs.map((log) => (
-          <div key={log.id} className="flex items-center gap-3 p-3 bg-white hover:bg-gray-50 rounded-lg transition-all duration-200 border border-gray-100">
-            <div className={`w-10 h-10 rounded-full bg-blue flex items-center justify-center text-white text-lg font-medium flex-shrink-0`}>
-              {log.userInitials}
-            </div>
+        {isLoading ? (
+          <div className="space-y-3">
+            {[...Array(5)].map((_, index) => (
+              <div key={index} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-100">
+                <div className="animate-pulse">
+                  <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
+                </div>
+                <div className="flex-1 animate-pulse">
+                  <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                  <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : error ? (
+          <div className="text-center py-8 text-red-500">
+            <Activity className="h-12 w-12 mx-auto mb-3 text-red-300" />
+            <p>Error loading activity logs</p>
+          </div>
+        ) : logs && logs.length > 0 ? (
+          logs.map((log) => {
+            const userName = log.user_first_name && log.user_last_name 
+              ? `${log.user_first_name} ${log.user_last_name}`
+              : 'Unknown User';
+            const userInitials = log.user_first_name && log.user_last_name 
+              ? `${log.user_first_name[0]}${log.user_last_name[0]}` 
+              : 'UN';
             
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-900">
-                    <span className="font-medium">{log.user}</span>{' '}
-                    <span className="text-gray-600">{log.description}</span>
-                  </p>
+            return (
+              <div key={log.id} className="flex items-center gap-3 p-3 bg-white hover:bg-gray-50 rounded-lg transition-all duration-200 border border-gray-100">
+                <div className={`w-10 h-10 rounded-full bg-blue flex items-center justify-center text-white text-lg font-medium flex-shrink-0`}>
+                  {userInitials}
                 </div>
                 
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {getActivityIcon(log.type)}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-900">
+                        <span className="font-medium">{userName}</span>{' '}
+                        <span className="text-gray-600">{log.description || `${log.action} ${log.entity}`}</span>
+                      </p>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {getActivityIcon(log.action)}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-1 mt-2 text-xs text-gray-500">
+                    <Clock className="h-3 w-3" />
+                    {formatRelativeTime(log.created_at)}
+                  </div>
                 </div>
               </div>
-              
-              <div className="flex items-center gap-1 mt-2 text-xs text-gray-500">
-                <Clock className="h-3 w-3" />
-                {formatRelativeTime(log.timestamp)}
-              </div>
-            </div>
-          </div>
-        ))}
-        
-        {mockActivityLogs.length === 0 && (
+            );
+          })
+        ) : (
           <div className="text-center py-8 text-gray-500">
             <Activity className="h-12 w-12 mx-auto mb-3 text-gray-300" />
             <p>No activity logs found</p>
@@ -141,4 +107,4 @@ const ActivityLogs = () => {
   )
 }
 
-export default ActivityLogs
+export default ActivityLogs;

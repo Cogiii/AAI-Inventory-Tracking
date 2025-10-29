@@ -19,6 +19,10 @@ const authRoutes = require('./routes/auth');
 const inventoryRoutes = require('./routes/inventory');
 const userRoutes = require('./routes/users');
 const positionRoutes = require('./routes/positions');
+const dashboardRoutes = require('./routes/dashboard');
+const projectRoutes = require('./routes/projects');
+const projectDetailRoutes = require('./routes/project-detail');
+const calendarRoutes = require('./routes/calendar');
 
 const app = express();
 
@@ -68,6 +72,10 @@ app.use('/api/auth', authRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/positions', positionRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/project-detail', projectDetailRoutes);
+app.use('/api/calendar', calendarRoutes);
 
 // Welcome route
 app.get('/', (req, res) => {

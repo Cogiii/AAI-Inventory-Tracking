@@ -1,5 +1,6 @@
 import ProjectStats from './components/ProjectStats.tsx'
 import ProjectTable from './components/ProjectTable.tsx'
+import CreateProjectModal from './components/CreateProjectModal.tsx'
 
 const Projects = () => {
   return (
@@ -9,6 +10,9 @@ const Projects = () => {
 
       {/* Projects Table */}
       <ProjectTable />
+
+      {/* Modals */}
+      <CreateProjectModal />
     </div>
   )
 }

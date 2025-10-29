@@ -63,59 +63,67 @@ const schemas = {
     role: Joi.string().valid('admin', 'manager', 'user')
   }),
 
-  // Inventory validation schemas
+  // Inventory validation schemas (based on database schema)
   createInventoryItem: Joi.object({
-    name: Joi.string().min(2).max(100).required().messages({
+    type: Joi.string().valid('product', 'material').required().messages({
+      'any.only': 'Type must be either "product" or "material"',
+      'any.required': 'Item type is required'
+    }),
+    brand_id: Joi.number().integer().positive().allow(null).messages({
+      'number.positive': 'Brand ID must be a positive number'
+    }),
+    name: Joi.string().min(2).max(255).required().messages({
       'string.min': 'Item name must be at least 2 characters long',
-      'string.max': 'Item name cannot exceed 100 characters',
+      'string.max': 'Item name cannot exceed 255 characters',
       'any.required': 'Item name is required'
     }),
-    description: Joi.string().max(500).allow('').default(''),
-    category: Joi.string().min(2).max(50).required().messages({
-      'string.min': 'Category must be at least 2 characters long',
-      'string.max': 'Category cannot exceed 50 characters',
-      'any.required': 'Category is required'
+    description: Joi.string().allow('', null).default(null),
+    delivered_quantity: Joi.number().integer().min(0).default(0).messages({
+      'number.min': 'Delivered quantity cannot be negative',
+      'number.integer': 'Delivered quantity must be a whole number'
     }),
-    quantity: Joi.number().integer().min(0).required().messages({
-      'number.min': 'Quantity cannot be negative',
-      'number.integer': 'Quantity must be a whole number',
-      'any.required': 'Quantity is required'
+    damaged_quantity: Joi.number().integer().min(0).default(0).messages({
+      'number.min': 'Damaged quantity cannot be negative',
+      'number.integer': 'Damaged quantity must be a whole number'
     }),
-    price: Joi.number().min(0).precision(2).required().messages({
-      'number.min': 'Price cannot be negative',
-      'any.required': 'Price is required'
+    lost_quantity: Joi.number().integer().min(0).default(0).messages({
+      'number.min': 'Lost quantity cannot be negative',
+      'number.integer': 'Lost quantity must be a whole number'
     }),
-    sku: Joi.string().alphanum().min(3).max(20).required().messages({
-      'string.alphanum': 'SKU must contain only letters and numbers',
-      'string.min': 'SKU must be at least 3 characters long',
-      'string.max': 'SKU cannot exceed 20 characters',
-      'any.required': 'SKU is required'
+    available_quantity: Joi.number().integer().min(0).default(0).messages({
+      'number.min': 'Available quantity cannot be negative',
+      'number.integer': 'Available quantity must be a whole number'
     }),
-    location: Joi.string().max(100).allow('').default(''),
-    minStockLevel: Joi.number().integer().min(0).default(0),
-    supplier: Joi.string().max(100).allow('').default('')
+    warehouse_location_id: Joi.number().integer().positive().allow(null).messages({
+      'number.positive': 'Warehouse location ID must be a positive number'
+    }),
+    status: Joi.string().max(50).allow('', null).default(null)
   }),
 
   updateInventoryItem: Joi.object({
-    name: Joi.string().min(2).max(100),
-    description: Joi.string().max(500).allow(''),
-    category: Joi.string().min(2).max(50),
-    quantity: Joi.number().integer().min(0),
-    price: Joi.number().min(0).precision(2),
-    sku: Joi.string().alphanum().min(3).max(20),
-    location: Joi.string().max(100).allow(''),
-    minStockLevel: Joi.number().integer().min(0),
-    supplier: Joi.string().max(100).allow('')
+    type: Joi.string().valid('product', 'material'),
+    brand_id: Joi.number().integer().positive().allow(null),
+    name: Joi.string().min(2).max(255),
+    description: Joi.string().allow('', null),
+    delivered_quantity: Joi.number().integer().min(0),
+    damaged_quantity: Joi.number().integer().min(0),
+    lost_quantity: Joi.number().integer().min(0),
+    available_quantity: Joi.number().integer().min(0),
+    warehouse_location_id: Joi.number().integer().positive().allow(null),
+    status: Joi.string().max(50).allow('', null)
   }),
 
   // Query parameter validation
   paginationQuery: Joi.object({
     page: Joi.number().integer().min(1).default(1),
     limit: Joi.number().integer().min(1).max(100).default(10),
-    sort: Joi.string().valid('name', 'category', 'quantity', 'price', 'createdAt', 'updatedAt').default('createdAt'),
+    sort: Joi.string().valid('name', 'type', 'available_quantity', 'delivered_quantity', 'created_at', 'updated_at').default('created_at'),
     order: Joi.string().valid('asc', 'desc').default('desc'),
     search: Joi.string().max(100).allow(''),
-    category: Joi.string().max(50).allow('')
+    type: Joi.string().valid('product', 'material').allow(''),
+    brand: Joi.string().max(100).allow(''),
+    location: Joi.string().max(100).allow(''),
+    status: Joi.string().valid('active', 'low_stock', 'out_of_stock', 'inactive').allow('')
   })
 };
 

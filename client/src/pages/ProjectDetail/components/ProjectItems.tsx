@@ -1,111 +1,22 @@
 import { useState } from 'react'
 import type { FC } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Package, Box, AlertTriangle, CheckCircle, XCircle, Plus, Edit, Trash2, Calendar } from 'lucide-react'
+import { Package, Box, AlertTriangle, CheckCircle, XCircle, Plus, Edit, Trash2, Calendar, Loader2 } from 'lucide-react'
 import AddItemForm from '../modals/AddItemForm'
 import EditItemForm from '../modals/EditItemForm'
 import { ConfirmationModal } from '@/components/ui'
-import { getProjectDaysByJO, getAvailableItems } from '@/utils/projectData'
-
-// Mock project items data organized by day (based on project_item table schema)
-const getProjectItemsByJO = (joNumber: string) => {
-  const projectItemsByDay: Record<string, Record<number, any[]>> = {
-    'JO-2024-001': {
-      1: [ // Project Day 1
-        {
-          id: 1,
-          project_day_id: 1,
-          item_id: 101,
-          item_name: 'Steel Beams (I-Shape)',
-          item_type: 'material',
-          brand_name: 'Philippine Steel',
-          allocated_quantity: 30,
-          damaged_quantity: 0,
-          lost_quantity: 0,
-          returned_quantity: 0,
-          status: 'allocated',
-          warehouse_location: 'Warehouse A-Section 3'
-        },
-        {
-          id: 2,
-          project_day_id: 1,
-          item_id: 102,
-          item_name: 'Concrete Mixer (Heavy Duty)',
-          item_type: 'product',
-          brand_name: 'Caterpillar',
-          allocated_quantity: 2,
-          damaged_quantity: 0,
-          lost_quantity: 0,
-          returned_quantity: 0,
-          status: 'in_use',
-          warehouse_location: 'Equipment Bay 1'
-        }
-      ],
-      2: [ // Project Day 2
-        {
-          id: 3,
-          project_day_id: 2,
-          item_id: 101,
-          item_name: 'Steel Beams (I-Shape)',
-          item_type: 'material',
-          brand_name: 'Philippine Steel',
-          allocated_quantity: 20,
-          damaged_quantity: 2,
-          lost_quantity: 0,
-          returned_quantity: 5,
-          status: 'partial_return',
-          warehouse_location: 'Warehouse A-Section 3'
-        },
-        {
-          id: 4,
-          project_day_id: 2,
-          item_id: 103,
-          item_name: 'Excavator (Medium)',
-          item_type: 'product',
-          brand_name: 'Komatsu',
-          allocated_quantity: 1,
-          damaged_quantity: 1,
-          lost_quantity: 0,
-          returned_quantity: 0,
-          status: 'damaged',
-          warehouse_location: 'Equipment Bay 2'
-        }
-      ]
-    },
-    'JO-2024-002': {
-      5: [ // Project Day 1
-        {
-          id: 5,
-          project_day_id: 5,
-          item_id: 104,
-          item_name: 'Reinforcement Steel Bars',
-          item_type: 'material',
-          brand_name: 'SteelAsia',
-          allocated_quantity: 100,
-          damaged_quantity: 0,
-          lost_quantity: 0,
-          returned_quantity: 0,
-          status: 'allocated',
-          warehouse_location: 'Warehouse A-Section 2'
-        }
-      ]
-    }
-  }
-  return projectItemsByDay[joNumber] || {}
-}
-
-
+import { useProjectDetail } from '@/hooks/useProjectDetail'
 
 interface ProjectItemsProps {
   joNumber?: string
 }
 
 const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
+  const { data: projectData, isLoading: projectLoading, error: projectError } = useProjectDetail(joNumber)
   const [selectedDay, setSelectedDay] = useState<number | 'all'>('all')
   const [showAddForm, setShowAddForm] = useState(false)
-  const [editingItem, setEditingItem] = useState<any>(null)
-  const [projectItems, setProjectItems] = useState(() => getProjectItemsByJO(joNumber || ''))
   const [applyToAllDays, setApplyToAllDays] = useState(false)
+  const [editingItem, setEditingItem] = useState<any>(null)
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean
     item: any
@@ -114,8 +25,29 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
 
   if (!joNumber) return null
 
-  const projectDays = getProjectDaysByJO(joNumber)
-  const availableItems = getAvailableItems()
+  if (projectLoading) {
+    return (
+      <Card className="bg-gray">
+        <CardContent className="p-6 text-center">
+          <Loader2 className="h-8 w-8 mx-auto mb-4 text-blue-500 animate-spin" />
+          <p className="text-gray-600">Loading project items...</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (projectError || !projectData) {
+    return (
+      <Card className="bg-gray">
+        <CardContent className="p-6 text-center">
+          <AlertTriangle className="h-8 w-8 mx-auto mb-4 text-red-500" />
+          <p className="text-gray-600">Error loading project items</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const projectDays = projectData.project_days || []
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -165,73 +97,20 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
     if (selectedDay === 'all') {
       // Combine all items from all days
       const allItems: any[] = []
-      Object.values(projectItems).forEach(dayItems => {
-        allItems.push(...dayItems)
+      projectDays.forEach(day => {
+        allItems.push(...day.items)
       })
       return allItems
     }
-    return projectItems[selectedDay as number] || []
+    // Find the specific day and return its items
+    const targetDay = projectDays.find(day => day.id === selectedDay)
+    return targetDay ? targetDay.items : []
   }
 
-  const handleAddItem = (newItem: any) => {
-    const itemId = Date.now()
-    const itemToAdd = {
-      ...newItem,
-      id: itemId,
-      created_at: new Date().toISOString()
-    }
 
-    if (applyToAllDays) {
-      // Add to all project days
-      const updatedItems = { ...projectItems }
-      projectDays.forEach(day => {
-        if (!updatedItems[day.id]) {
-          updatedItems[day.id] = []
-        }
-        updatedItems[day.id].push({
-          ...itemToAdd,
-          project_day_id: day.id
-        })
-      })
-      setProjectItems(updatedItems)
-    } else {
-      // Add to selected day only
-      const dayId = selectedDay === 'all' ? projectDays[0]?.id : selectedDay
-      if (dayId) {
-        const updatedItems = { ...projectItems }
-        if (!updatedItems[dayId]) {
-          updatedItems[dayId] = []
-        }
-        updatedItems[dayId].push({
-          ...itemToAdd,
-          project_day_id: dayId
-        })
-        setProjectItems(updatedItems)
-      }
-    }
-    setShowAddForm(false)
-    setApplyToAllDays(false)
-  }
-
-  const handleEditItem = (updatedItem: any) => {
-    const updatedItems = { ...projectItems }
-    const dayId = updatedItem.project_day_id
-    if (updatedItems[dayId]) {
-      const itemIndex = updatedItems[dayId].findIndex(item => item.id === updatedItem.id)
-      if (itemIndex !== -1) {
-        updatedItems[dayId][itemIndex] = { ...updatedItem, updated_at: new Date().toISOString() }
-        setProjectItems(updatedItems)
-      }
-    }
-    setEditingItem(null)
-  }
 
   const handleDeleteItem = (itemId: number, dayId: number) => {
-    const updatedItems = { ...projectItems }
-    if (updatedItems[dayId]) {
-      updatedItems[dayId] = updatedItems[dayId].filter(item => item.item_id !== itemId)
-      setProjectItems(updatedItems)
-    }
+    console.log('Delete item:', itemId, 'from day:', dayId)
   }
 
   const handleDeleteClick = (item: any, dayId: number) => {
@@ -399,12 +278,11 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
         {/* Add Item Form Modal */}
         <AddItemForm
           isOpen={showAddForm}
-          availableItems={availableItems}
+          joNumber={joNumber!}
           projectDays={projectDays}
           selectedDay={selectedDay}
           applyToAllDays={applyToAllDays}
           setApplyToAllDays={setApplyToAllDays}
-          onSave={handleAddItem}
           onCancel={() => {
             setShowAddForm(false)
             setApplyToAllDays(false)
@@ -415,8 +293,7 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
         <EditItemForm
           isOpen={!!editingItem}
           item={editingItem}
-          availableItems={availableItems}
-          onSave={handleEditItem}
+          onSave={() => setEditingItem(null)}
           onCancel={() => setEditingItem(null)}
         />
 

@@ -1,5 +1,3 @@
-import React from 'react';
-
 // Main pages
 export { default as Login } from './Login';
 export { default as Dashboard } from './Dashboard';
@@ -15,5 +13,3 @@ export { default as UnauthorizedPage } from './Unauthorized';
 export { default as InventoryPage } from './Inventory';
 export { default as ItemDetails } from './ItemDetails';
 export { default as UsersPage } from './Users';
-export const AnalyticsPage: React.FC = () => <div className="text-center py-8">Analytics Page - Coming Soon</div>;
-export const SettingsPage: React.FC = () => <div className="text-center py-8">Settings Page - Coming Soon</div>;

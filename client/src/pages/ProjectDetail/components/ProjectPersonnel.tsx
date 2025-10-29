@@ -2,73 +2,9 @@ import { useState } from 'react'
 import type { FC } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmationModal } from '@/components/ui'
-import { Users, User, Phone, Calendar, Briefcase, Plus, Trash2 } from 'lucide-react'
+import { Users, User, Phone, Calendar, Briefcase, Plus, Trash2, Loader2, AlertTriangle } from 'lucide-react'
 import AddPersonnelForm from '../modals/AddPersonnelForm'
-import { getProjectDaysByJO } from '@/utils/projectData'
-
-// Mock project personnel data organized by day (based on project_personnel table schema)
-const getProjectPersonnelByJO = (joNumber: string) => {
-  const projectPersonnelByDay: Record<string, Record<number, any[]>> = {
-    'JO-2024-001': {
-      1: [ // Project Day 1
-        {
-          project_day_id: 1,
-          personnel_id: 101,
-          role_id: 1,
-          personnel_name: 'Carlos Rodriguez',
-          contact_number: '+63-917-123-4567',
-          role_name: 'Project Manager',
-          is_active: true
-        },
-        {
-          project_day_id: 1,
-          personnel_id: 102,
-          role_id: 2,
-          personnel_name: 'Maria Santos',
-          contact_number: '+63-917-234-5678',
-          role_name: 'Site Engineer',
-          is_active: true
-        }
-      ],
-      2: [ // Project Day 2
-        {
-          project_day_id: 2,
-          personnel_id: 101,
-          role_id: 1,
-          personnel_name: 'Carlos Rodriguez',
-          contact_number: '+63-917-123-4567',
-          role_name: 'Project Manager',
-          is_active: true
-        },
-        {
-          project_day_id: 2,
-          personnel_id: 103,
-          role_id: 3,
-          personnel_name: 'Roberto Cruz',
-          contact_number: '+63-917-345-6789',
-          role_name: 'Construction Foreman',
-          is_active: true
-        }
-      ]
-    },
-    'JO-2024-002': {
-      5: [ // Project Day 1
-        {
-          project_day_id: 5,
-          personnel_id: 104,
-          role_id: 1,
-          personnel_name: 'David Kim',
-          contact_number: '+63-917-789-0123',
-          role_name: 'Project Manager',
-          is_active: true
-        }
-      ]
-    }
-  }
-  return projectPersonnelByDay[joNumber] || {}
-}
-
-// Mock available personnel and roles
+import { useProjectDetail, usePersonnelRoles, useRemovePersonnel } from '@/hooks/useProjectDetail'
 
 
 interface ProjectPersonnelProps {
@@ -76,9 +12,11 @@ interface ProjectPersonnelProps {
 }
 
 const ProjectPersonnel: FC<ProjectPersonnelProps> = ({ joNumber }) => {
+  // All hooks must be called at the top level, before any early returns
+  const { data: projectData, isLoading: projectLoading, error: projectError } = useProjectDetail(joNumber)
+  const removePersonnelMutation = useRemovePersonnel()
   const [selectedDay, setSelectedDay] = useState<number | 'all'>('all')
   const [showAddForm, setShowAddForm] = useState(false)
-  const [projectPersonnel, setProjectPersonnel] = useState(() => getProjectPersonnelByJO(joNumber || ''))
   const [applyToAllDays, setApplyToAllDays] = useState(false)
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean
@@ -92,7 +30,29 @@ const ProjectPersonnel: FC<ProjectPersonnelProps> = ({ joNumber }) => {
 
   if (!joNumber) return null
 
-  const projectDays = getProjectDaysByJO(joNumber)
+  if (projectLoading) {
+    return (
+      <Card className="bg-gray">
+        <CardContent className="p-6 text-center">
+          <Loader2 className="h-8 w-8 mx-auto mb-4 text-blue-500 animate-spin" />
+          <p className="text-gray-600">Loading project personnel...</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (projectError || !projectData) {
+    return (
+      <Card className="bg-gray">
+        <CardContent className="p-6 text-center">
+          <AlertTriangle className="h-8 w-8 mx-auto mb-4 text-red-500" />
+          <p className="text-gray-600">Error loading project personnel</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const projectDays = projectData.project_days || []
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -114,12 +74,14 @@ const ProjectPersonnel: FC<ProjectPersonnelProps> = ({ joNumber }) => {
     if (selectedDay === 'all') {
       // Combine all personnel from all days
       const allPersonnel: any[] = []
-      Object.values(projectPersonnel).forEach(dayPersonnel => {
-        allPersonnel.push(...dayPersonnel)
+      projectDays.forEach(day => {
+        allPersonnel.push(...day.personnel)
       })
       return allPersonnel
     }
-    return projectPersonnel[selectedDay as number] || []
+    // Find the specific day and return its personnel
+    const targetDay = projectDays.find(day => day.id === selectedDay)
+    return targetDay ? targetDay.personnel : []
   }
 
   const displayPersonnel = getDisplayPersonnel()
@@ -134,65 +96,16 @@ const ProjectPersonnel: FC<ProjectPersonnelProps> = ({ joNumber }) => {
     return acc
   }, {})
 
-  const handleAddPersonnel = (newPersonnel: any) => {
-    const personnelToAdd = {
-      ...newPersonnel,
-      created_at: new Date().toISOString()
-    }
-
-    if (applyToAllDays) {
-      // Add to all project days
-      const updatedPersonnel = { ...projectPersonnel }
-      projectDays.forEach(day => {
-        if (!updatedPersonnel[day.id]) {
-          updatedPersonnel[day.id] = []
-        }
-        // Check if person with same role already exists for this day
-        const exists = updatedPersonnel[day.id].some(p => 
-          p.personnel_id === personnelToAdd.personnel_id && 
-          p.role_id === personnelToAdd.role_id
-        )
-        if (!exists) {
-          updatedPersonnel[day.id].push({
-            ...personnelToAdd,
-            project_day_id: day.id
-          })
-        }
+  const handleDeletePersonnel = async (personnelId: number, roleId: number, dayId: number) => {
+    try {
+      await removePersonnelMutation.mutateAsync({
+        joNumber: joNumber!,
+        projectDayId: dayId,
+        personnelId,
+        roleId
       })
-      setProjectPersonnel(updatedPersonnel)
-    } else {
-      // Add to selected day only
-      const dayId = selectedDay === 'all' ? projectDays[0]?.id : selectedDay
-      if (dayId) {
-        const updatedPersonnel = { ...projectPersonnel }
-        if (!updatedPersonnel[dayId]) {
-          updatedPersonnel[dayId] = []
-        }
-        // Check if person with same role already exists for this day
-        const exists = updatedPersonnel[dayId].some(p => 
-          p.personnel_id === personnelToAdd.personnel_id && 
-          p.role_id === personnelToAdd.role_id
-        )
-        if (!exists) {
-          updatedPersonnel[dayId].push({
-            ...personnelToAdd,
-            project_day_id: dayId
-          })
-        }
-        setProjectPersonnel(updatedPersonnel)
-      }
-    }
-    setShowAddForm(false)
-    setApplyToAllDays(false)
-  }
-
-  const handleDeletePersonnel = (personnelId: number, roleId: number, dayId: number) => {
-    const updatedPersonnel = { ...projectPersonnel }
-    if (updatedPersonnel[dayId]) {
-      updatedPersonnel[dayId] = updatedPersonnel[dayId].filter(
-        person => !(person.personnel_id === personnelId && person.role_id === roleId)
-      )
-      setProjectPersonnel(updatedPersonnel)
+    } catch (error) {
+      console.error('Error removing personnel:', error)
     }
   }
 
@@ -358,11 +271,11 @@ const ProjectPersonnel: FC<ProjectPersonnelProps> = ({ joNumber }) => {
         {/* Add Personnel Form Modal */}
         <AddPersonnelForm
           isOpen={showAddForm}
+          joNumber={joNumber!}
           projectDays={projectDays}
           selectedDay={selectedDay}
           applyToAllDays={applyToAllDays}
           setApplyToAllDays={setApplyToAllDays}
-          onSave={handleAddPersonnel}
           onCancel={() => {
             setShowAddForm(false)
             setApplyToAllDays(false)

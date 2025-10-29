@@ -88,6 +88,15 @@ export interface PaginationParams {
   category?: string;
 }
 
+// Filter related types
+export interface FilterState {
+  search: string;
+  type: 'all' | 'product' | 'material';
+  brand: string;
+  location: string;
+  status: 'all' | 'active' | 'low_stock' | 'out_of_stock' | 'inactive';
+}
+
 export interface PaginatedResponse<T> {
   items: T[];
   totalItems: number;
@@ -128,4 +137,194 @@ export interface RouteConfig {
   requiresAuth: boolean;
   requiredRole?: UserRole;
   title: string;
+}
+
+// Dashboard types
+export interface DashboardStats {
+  totalStocks: number;
+  activeProjects: number;
+  totalLocations: number;
+  totalPersonnel: number;
+  lowStockItems: number;
+  todayAllocations: number;
+}
+
+export interface RecentProject {
+  id: number;
+  jo_number: string;
+  name: string;
+  description: string;
+  status: 'ongoing' | 'upcoming' | 'completed' | 'cancelled';
+  created_at: string;
+  creator_first_name: string;
+  creator_last_name: string;
+  total_days: number;
+  total_items_allocated: number;
+}
+
+export interface InventoryLog {
+  id: number;
+  log_type: 'in' | 'out' | 'transfer';
+  reference_no: string;
+  quantity: number;
+  remarks: string;
+  created_at: string;
+  item_name: string;
+  item_type: 'product' | 'material';
+  from_location_name?: string;
+  to_location_name?: string;
+  handler_first_name?: string;
+  handler_last_name?: string;
+}
+
+export interface ActivityLog {
+  id: number;
+  action: string;
+  entity: string;
+  entity_id: number;
+  description: string;
+  created_at: string;
+  user_first_name?: string;
+  user_last_name?: string;
+}
+
+export interface LowStockItem {
+  id: number;
+  name: string;
+  type: 'product' | 'material';
+  available_quantity: number;
+  delivered_quantity: number;
+  brand_name?: string;
+  warehouse_name?: string;
+}
+
+export interface InventorySummary {
+  type: 'product' | 'material';
+  item_count: number;
+  total_quantity: number;
+  total_delivered: number;
+  total_damaged: number;
+  total_lost: number;
+}
+
+// Project related types
+export interface Project {
+  project_id: number;
+  jo_number: string;
+  project_name: string;
+  description: string;
+  status: 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
+  created_at: string;
+  updated_at: string;
+  created_by_name: string;
+  total_project_days?: number;
+  total_allocated_items?: number;
+  total_allocated_quantity?: number;
+  project_locations?: string;
+}
+
+export interface ProjectStats {
+  total_projects: number;
+  upcoming_projects: number;
+  ongoing_projects: number;
+  completed_projects: number;
+  cancelled_projects: number;
+  recent_activity: number;
+  total_items_allocated: number;
+  total_quantity_allocated: number;
+}
+
+export interface ProjectDay {
+  project_day_id: number;
+  project_date: string;
+  location_id: number;
+  location_name: string;
+  location_type: string;
+  city: string;
+  province: string;
+  total_items: number;
+  total_allocated_quantity: number;
+}
+
+export interface ProjectItem {
+  item_id: number;
+  item_name: string;
+  item_type: string;
+  brand_name: string;
+  total_allocated: number;
+  total_damaged: number;
+  total_lost: number;
+  total_returned: number;
+}
+
+export interface ProjectDetails {
+  project: Project;
+  project_days: ProjectDay[];
+  project_items: ProjectItem[];
+}
+
+export interface ProjectFilters {
+  page?: number;
+  limit?: number;
+  status?: string;
+  search?: string;
+  sortBy?: string;
+  sortOrder?: 'ASC' | 'DESC';
+}
+
+export interface ProjectsResponse {
+  projects: Project[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalProjects: number;
+    limit: number;
+  };
+}
+
+export interface CreateProjectRequest {
+  jo_number: string;
+  name: string;
+  description?: string;
+  status?: 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
+}
+
+export interface UpdateProjectRequest {
+  jo_number?: string;
+  name?: string;
+  description?: string;
+  status?: 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
+}
+
+// Calendar related types
+export interface CalendarEvent {
+  id: number;
+  jo_number: string;
+  name: string;
+  description?: string;
+  status: 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
+  project_days: CalendarProjectDay[];
+}
+
+export interface CalendarProjectDay {
+  id: number;
+  date: string; // YYYY-MM-DD format
+  location: string;
+  location_id?: number;
+  full_address?: string;
+  location_type?: 'warehouse' | 'project_site' | 'office';
+}
+
+export interface CalendarEventsResponse {
+  success: boolean;
+  data: CalendarEvent[];
+  total: number;
+  message: string;
+  month?: number;
+  year?: number;
+}
+
+export interface CalendarEventsParams {
+  start_date?: string;
+  end_date?: string;
 }

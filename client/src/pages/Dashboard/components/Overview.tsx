@@ -1,55 +1,65 @@
 import { Card, CardContent } from '@/components/ui/card'
 import {
-  Users,
   Package,
   FolderOpen,
-  Building2
+  TrendingUp
 } from 'lucide-react'
+import { useDashboardStats } from '@/hooks/useDashboard'
 
 const Overview = () => {
-  // Mock data for info cards
-  const stats = [
+  const { data: stats, isLoading, error } = useDashboardStats();
+
+  const statCards = [
     {
-      title: 'Current Stocks',
-      value: '1,009,879',
+      title: 'Total Items',
+      value: stats?.totalStocks || 0,
       icon: Package,
+      color: 'text-gray-custom',
     },
     {
-      title: 'Current Projects',
-      value: '75,098',
+      title: 'Active Projects',
+      value: stats?.activeProjects || 0,
       icon: FolderOpen,
+      color: 'text-gray-custom',
     },
     {
-      title: 'Current Clients',
-      value: '10,980',
-      icon: Building2,
-    },
-    {
-      title: 'Total Employees',
-      value: '68',
-      icon: Users,
+      title: "Today's Allocations",
+      value: stats?.todayAllocations || 0,
+      icon: TrendingUp,
+      color: 'text-gray-custom',
     }
   ]
+
+  if (error) {
+    return (
+      <div className="space-y-6 bg-gray p-7 rounded-lg">
+        <h1 className="text-2xl font-semibold text-gray-custom">Dashboard</h1>
+        <div className="text-red-600 p-4 bg-red-50 rounded-lg">
+          Error loading dashboard data. Please try again later.
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 bg-gray p-7 rounded-lg">
       <h1 className="text-2xl font-semibold text-gray-custom">Dashboard</h1>
 
       {/* Info Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, index) => {
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {statCards.map((stat, index) => {
           const Icon = stat.icon
           return (
             <Card key={index} className="hover:shadow-md transition-shadow bg-white">
               <CardContent className="p-6">
                 <div className="flex items-center space-x-4">
-                  <Icon className={`h-6 w-6`} />
+                  <Icon className={`h-6 w-6 ${stat.color}`} />
                   <div>
                     <p className="text-md font-bold text-gray-700">
                       {stat.title}
                     </p>
                     <p className="text-sm font-medium text-gray-500">
-                      {stat.value}
+                      {isLoading ? '...' : stat.value.toLocaleString()}
                     </p>
                   </div>
                 </div>

@@ -128,7 +128,7 @@ CREATE TABLE project_item (
     damaged_quantity INT DEFAULT 0,
     lost_quantity INT DEFAULT 0,
     returned_quantity INT DEFAULT 0,
-    status VARCHAR(50),
+    status VARCHAR(50), -- Accepted, Rejected, Pending
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NULL ON UPDATE NOW()
 );
