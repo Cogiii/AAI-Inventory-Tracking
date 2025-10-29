@@ -11,8 +11,9 @@ export { default as Calendar } from './Calendar';
 export { default as NotFoundPage } from './NotFound';
 export { default as UnauthorizedPage } from './Unauthorized';
 
-// Feature pages (placeholders for now)
-export const InventoryPage: React.FC = () => <div className="text-center py-8">Inventory Page - Coming Soon</div>;
+// Feature pages
+export { default as InventoryPage } from './Inventory';
+export { default as ItemDetails } from './ItemDetails';
+export { default as UsersPage } from './Users';
 export const AnalyticsPage: React.FC = () => <div className="text-center py-8">Analytics Page - Coming Soon</div>;
-export const UsersPage: React.FC = () => <div className="text-center py-8">Users Management - Coming Soon</div>;
 export const SettingsPage: React.FC = () => <div className="text-center py-8">Settings Page - Coming Soon</div>;

@@ -13,6 +13,7 @@ import {
   ProjectDetail,
   Calendar,
   InventoryPage,
+  ItemDetails,
   AnalyticsPage,
   UsersPage,
   SettingsPage
@@ -98,6 +99,17 @@ export const router = createBrowserRouter([
     errorElement: <RouterErrorBoundary />,
   },
   {
+    path: '/inventory/item/:id',
+    element: (
+      <ProtectedRoute>
+        <Layout showSidebar={true}>
+          <ItemDetails />
+        </Layout>
+      </ProtectedRoute>
+    ),
+    errorElement: <RouterErrorBoundary />,
+  },
+  {
     path: '/analytics',
     element: (
       <ProtectedRoute>
@@ -111,7 +123,7 @@ export const router = createBrowserRouter([
   {
     path: '/users',
     element: (
-      <ProtectedRoute requiredRoles={['admin', 'manager']}>
+      <ProtectedRoute requiredRoles={['Administrator', 'Marketing Manager']}>
         <Layout showSidebar={true}>
           <UsersPage />
         </Layout>

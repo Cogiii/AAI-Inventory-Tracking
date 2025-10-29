@@ -30,7 +30,10 @@ const Sidebar: FC<SidebarProps> = ({ isExpanded = true, onClose, onToggleExpand 
     { name: 'Projects', href: '/projects', icon: FolderOpen },
     { name: 'Calendar', href: '/calendar', icon: Calendar },
     { name: 'Inventory', href: '/inventory', icon: Package },
-    { name: 'Employees', href: '/users', icon: Users, roles: ['admin', 'manager'] },
+  ];
+
+  const administrationNavigation: NavigationItemConfig[] = [
+    { name: 'User Management', href: '/users', icon: Users, roles: ['Administrator', 'Marketing Manager'] },
   ];
 
   const handleLogout = async () => {
@@ -67,6 +70,19 @@ const Sidebar: FC<SidebarProps> = ({ isExpanded = true, onClose, onToggleExpand 
           <NavigationSection
             title="Records"
             items={recordsNavigation}
+            userRole={user?.role}
+            onItemClick={() => {
+              // Only close sidebar on mobile screens
+              if (window.innerWidth < 640) {
+                onClose();
+              }
+            }}
+            isExpanded={isExpanded}
+          />
+
+          <NavigationSection
+            title="Administration"
+            items={administrationNavigation}
             userRole={user?.role}
             onItemClick={() => {
               // Only close sidebar on mobile screens

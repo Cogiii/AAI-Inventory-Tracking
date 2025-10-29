@@ -20,7 +20,7 @@ export interface User {
   lastLogin?: string;
 }
 
-export type UserRole = 'admin' | 'manager' | 'user';
+export type UserRole = 'Administrator' | 'Marketing Manager' | 'Staff Member';
 
 // Auth related types
 export interface LoginCredentials {

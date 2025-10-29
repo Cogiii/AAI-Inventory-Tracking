@@ -11,7 +11,7 @@ interface SuperAdminRouteProps {
  */
 const SuperAdminRoute = ({ children }: SuperAdminRouteProps) => {
   return (
-    <ProtectedRoute requiredRoles={['SUPER_ADMIN']}>
+    <ProtectedRoute requiredRoles={['Administrator']}>
       {children}
     </ProtectedRoute>
   );
