@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { FC } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Package, Box, AlertTriangle, CheckCircle, XCircle, Plus, Edit, Trash2, Calendar } from 'lucide-react'
 import AddItemForm from '../modals/AddItemForm'
@@ -99,7 +100,7 @@ interface ProjectItemsProps {
   joNumber?: string
 }
 
-const ProjectItems: React.FC<ProjectItemsProps> = ({ joNumber }) => {
+const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
   const [selectedDay, setSelectedDay] = useState<number | 'all'>('all')
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingItem, setEditingItem] = useState<any>(null)

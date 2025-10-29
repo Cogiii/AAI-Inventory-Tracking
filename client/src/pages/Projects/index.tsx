@@ -1,5 +1,3 @@
-import { } from 'react'
-
 import ProjectStats from './components/ProjectStats.tsx'
 import ProjectTable from './components/ProjectTable.tsx'
 

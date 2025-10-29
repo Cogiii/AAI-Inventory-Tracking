@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { FC , FormEvent } from 'react'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { ConfirmationModal, PersonnelSelector, RoleSelector } from '@/components/ui'
@@ -22,7 +23,7 @@ interface PersonnelRow {
   selectedRole: any
 }
 
-const AddPersonnelForm: React.FC<AddPersonnelFormProps> = ({
+const AddPersonnelForm: FC<AddPersonnelFormProps> = ({
   isOpen,
   applyToAllDays,
   setApplyToAllDays,
@@ -80,7 +81,7 @@ const AddPersonnelForm: React.FC<AddPersonnelFormProps> = ({
     ))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     
     // Validate all rows

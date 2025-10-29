@@ -1,4 +1,4 @@
-import React from 'react';
+import type { FC } from 'react';
 import { 
   Modal, 
   ModalBody, 
@@ -39,7 +39,7 @@ interface UserDetailModalProps {
   onDelete: (userId: number) => void;
 }
 
-const UserDetailModal: React.FC<UserDetailModalProps> = ({
+const UserDetailModal: FC<UserDetailModalProps> = ({
   isOpen,
   onClose,
   user,

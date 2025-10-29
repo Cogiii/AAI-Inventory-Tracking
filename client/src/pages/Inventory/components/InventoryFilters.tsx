@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { FC } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Filter, Search, Download, Plus } from 'lucide-react'
 
@@ -9,7 +10,7 @@ interface InventoryFiltersProps {
   onSearchChange?: (search: string) => void
 }
 
-const InventoryFilters: React.FC<InventoryFiltersProps> = ({
+const InventoryFilters: FC<InventoryFiltersProps> = ({
   onTypeFilter,
   onStatusFilter,
   onBrandFilter,

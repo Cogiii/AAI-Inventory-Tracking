@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import type { FC, FormEvent } from 'react'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { ConfirmationModal } from '@/components/ui'
@@ -11,7 +12,7 @@ interface EditItemFormProps {
   onCancel: () => void
 }
 
-const EditItemForm: React.FC<EditItemFormProps> = ({ isOpen, item, onSave, onCancel }) => {
+const EditItemForm: FC<EditItemFormProps> = ({ isOpen, item, onSave, onCancel }) => {
   const [formData, setFormData] = useState({
     allocated_quantity: item?.allocated_quantity || 0,
     damaged_quantity: item?.damaged_quantity || 0,
@@ -35,7 +36,7 @@ const EditItemForm: React.FC<EditItemFormProps> = ({ isOpen, item, onSave, onCan
     }
   }, [item])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     const updatedItem = {
       ...item,

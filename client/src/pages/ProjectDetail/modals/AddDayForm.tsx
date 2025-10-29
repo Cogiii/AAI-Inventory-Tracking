@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { FC, FormEvent } from 'react'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { ConfirmationModal } from '@/components/ui'
@@ -11,7 +12,7 @@ interface AddDayFormProps {
   onCancel: () => void
 }
 
-const AddDayForm: React.FC<AddDayFormProps> = ({
+const AddDayForm: FC<AddDayFormProps> = ({
   isOpen,
   onSave,
   onCancel
@@ -28,7 +29,7 @@ const AddDayForm: React.FC<AddDayFormProps> = ({
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [pendingData, setPendingData] = useState<any>(null)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     
     if (!formData.project_date || !formData.location_id || !selectedLocation) {

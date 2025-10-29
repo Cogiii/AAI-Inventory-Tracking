@@ -1,3 +1,4 @@
+import type { FC } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ArrowLeft, FolderOpen, Calendar, User, AlertCircle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -43,7 +44,7 @@ interface ProjectInfoProps {
   joNumber?: string
 }
 
-const ProjectInfo: React.FC<ProjectInfoProps> = ({ joNumber }) => {
+const ProjectInfo: FC<ProjectInfoProps> = ({ joNumber }) => {
   const navigate = useNavigate()
   
   if (!joNumber) {

@@ -1,4 +1,4 @@
-import React from 'react';
+import type { FC } from 'react';
 import { Button } from '@/components/ui/button';
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal';
 
@@ -29,7 +29,7 @@ interface UserModalsProps {
   positions: Position[];
 }
 
-const UserModals: React.FC<UserModalsProps> = ({
+const UserModals: FC<UserModalsProps> = ({
   showAddModal,
   selectedUser,
   onCloseAddModal,

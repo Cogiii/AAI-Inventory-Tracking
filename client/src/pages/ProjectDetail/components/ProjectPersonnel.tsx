@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { FC } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmationModal } from '@/components/ui'
 import { Users, User, Phone, Calendar, Briefcase, Plus, Trash2 } from 'lucide-react'
@@ -74,7 +75,7 @@ interface ProjectPersonnelProps {
   joNumber?: string
 }
 
-const ProjectPersonnel: React.FC<ProjectPersonnelProps> = ({ joNumber }) => {
+const ProjectPersonnel: FC<ProjectPersonnelProps> = ({ joNumber }) => {
   const [selectedDay, setSelectedDay] = useState<number | 'all'>('all')
   const [showAddForm, setShowAddForm] = useState(false)
   const [projectPersonnel, setProjectPersonnel] = useState(() => getProjectPersonnelByJO(joNumber || ''))

@@ -1,4 +1,4 @@
-import React from 'react';
+import type { FC } from 'react';
 import { Search, Filter } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 
@@ -17,7 +17,7 @@ interface UserFiltersProps {
   positions: Position[];
 }
 
-const UserFilters: React.FC<UserFiltersProps> = ({
+const UserFilters: FC<UserFiltersProps> = ({
   searchTerm,
   onSearchChange,
   filterPosition,

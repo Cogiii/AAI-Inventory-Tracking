@@ -1,4 +1,4 @@
-import React from 'react';
+import type { FC } from 'react';
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, Trash2, UserX, UserCheck } from 'lucide-react';
@@ -13,7 +13,7 @@ interface ConfirmationModalProps {
   isLoading?: boolean;
 }
 
-const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
+const ConfirmationModal: FC<ConfirmationModalProps> = ({
   isOpen,
   onClose,
   onConfirm,

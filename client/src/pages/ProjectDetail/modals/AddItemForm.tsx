@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { FC, FormEvent } from 'react'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { ConfirmationModal } from '@/components/ui'
@@ -22,7 +23,7 @@ interface ItemRow {
   status: string
 }
 
-const AddItemForm: React.FC<AddItemFormProps> = ({
+const AddItemForm: FC<AddItemFormProps> = ({
   isOpen,
   availableItems,
   applyToAllDays,
@@ -63,7 +64,7 @@ const AddItemForm: React.FC<AddItemFormProps> = ({
     ))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     
     // Validate all rows

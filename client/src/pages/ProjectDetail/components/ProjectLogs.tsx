@@ -1,3 +1,4 @@
+import type { FC } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { FileText, Activity, AlertCircle, CheckCircle, Info, Clock } from 'lucide-react'
 
@@ -90,7 +91,7 @@ interface ProjectLogsProps {
   joNumber?: string
 }
 
-const ProjectLogs: React.FC<ProjectLogsProps> = ({ joNumber }) => {
+const ProjectLogs: FC<ProjectLogsProps> = ({ joNumber }) => {
   if (!joNumber) return null
 
   const projectLogs = getProjectLogsByJO(joNumber)

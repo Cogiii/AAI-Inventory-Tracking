@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { FC } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmationModal } from '@/components/ui'
 import { Calendar, MapPin, Clock, Plus, Edit, Trash2 } from 'lucide-react'
@@ -10,7 +11,7 @@ interface ProjectDaysProps {
   joNumber?: string
 }
 
-const ProjectDays: React.FC<ProjectDaysProps> = ({ joNumber }) => {
+const ProjectDays: FC<ProjectDaysProps> = ({ joNumber }) => {
   const [projectDays, setProjectDays] = useState(() => getProjectDaysByJO(joNumber || ''))
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingDay, setEditingDay] = useState<any>(null)

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import type { FC } from 'react';
 import { Plus, UserCheck, Users as UsersIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
@@ -92,7 +93,7 @@ interface User {
   updated_at: string;
 }
 
-const UserManagement: React.FC = () => {
+const UserManagement: FC = () => {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<User[]>(mockUsers);
   const [searchTerm, setSearchTerm] = useState('');

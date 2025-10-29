@@ -1,4 +1,3 @@
-import {} from 'react'
 import Overview from './components/Overview'
 import Projects from './components/Projects'
 import InventoryLogs from './components/InventoryLogs'

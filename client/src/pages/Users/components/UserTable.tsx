@@ -1,4 +1,4 @@
-import React from 'react';
+import type { FC } from 'react';
 import { 
   UserCheck, 
   UserX, 
@@ -27,7 +27,7 @@ interface UserTableProps {
   currentUserRole?: string;
 }
 
-const UserTable: React.FC<UserTableProps> = ({
+const UserTable: FC<UserTableProps> = ({
   users,
   onViewUser,
   currentUserRole

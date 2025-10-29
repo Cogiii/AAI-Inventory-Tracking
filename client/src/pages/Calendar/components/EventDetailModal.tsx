@@ -1,3 +1,4 @@
+import type { FC } from 'react'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { MapPin, Eye, Building2 } from 'lucide-react'
@@ -15,7 +16,7 @@ interface EventDetailModalProps {
   onViewProject: (joNumber: string) => void
 }
 
-const EventDetailModal: React.FC<EventDetailModalProps> = ({
+const EventDetailModal: FC<EventDetailModalProps> = ({
   isOpen,
   onClose,
   event,

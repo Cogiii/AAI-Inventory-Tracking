@@ -1,9 +1,9 @@
-import React from 'react';
+import type { FC } from 'react';
 import { Link } from 'react-router-dom';
 import { Shield, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-const UnauthorizedPage: React.FC = () => {
+const UnauthorizedPage: FC = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-red-50 to-rose-50">
       <div className="text-center px-4">
