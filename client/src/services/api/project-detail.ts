@@ -148,10 +148,13 @@ export const projectDetailMutationAPI = {
       personnel_id: number;
       role_id: number;
     }>;
+    recorded_by?: number;
   }) => {
     const response = await api.post('/project-detail/personnel', {
+      joNumber: data.joNumber,
       project_day_ids: data.project_day_ids,
-      personnel_assignments: data.personnel_assignments
+      personnel_assignments: data.personnel_assignments,
+      recorded_by: data.recorded_by
     });
     return response.data;
   },
@@ -161,9 +164,13 @@ export const projectDetailMutationAPI = {
     projectDayId: number;
     personnelId: number;
     roleId: number;
+    recorded_by?: number;
   }) => {
     const response = await api.delete(
-      `/project-detail/personnel/${data.projectDayId}/${data.personnelId}/${data.roleId}`
+      `/project-detail/personnel/${data.joNumber}/${data.projectDayId}/${data.personnelId}/${data.roleId}`,
+      {
+        data: { recorded_by: data.recorded_by }
+      }
     );
     return response.data;
   },
@@ -213,10 +220,13 @@ export const projectDetailMutationAPI = {
       allocated_quantity: number;
       status?: string;
     }>;
+    recorded_by?: number;
   }) => {
     const response = await api.post('/project-detail/project-items', {
+      joNumber: data.joNumber,
       project_day_ids: data.project_day_ids,
-      item_assignments: data.item_assignments
+      item_assignments: data.item_assignments,
+      recorded_by: data.recorded_by
     });
     return response.data;
   },

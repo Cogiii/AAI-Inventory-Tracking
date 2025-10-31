@@ -515,8 +515,8 @@ router.get('/:id', auth, async (req, res) => {
 
 // @route   POST /api/inventory
 // @desc    Create new inventory item
-// @access  Private (Manager/Admin)
-router.post('/', auth, authorize('manager', 'admin'), validate(schemas.createInventoryItem), async (req, res) => {
+// @access  Private
+router.post('/', auth, validate(schemas.createInventoryItem), async (req, res) => {
   try {
     const {
       type,
@@ -595,8 +595,8 @@ router.post('/', auth, authorize('manager', 'admin'), validate(schemas.createInv
 
 // @route   PUT /api/inventory/:id
 // @desc    Update inventory item
-// @access  Private (Manager/Admin)
-router.put('/:id', auth, authorize('manager', 'admin'), validate(schemas.updateInventoryItem), async (req, res) => {
+// @access  Private
+router.put('/:id', auth, validate(schemas.updateInventoryItem), async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -680,8 +680,8 @@ router.put('/:id', auth, authorize('manager', 'admin'), validate(schemas.updateI
 
 // @route   DELETE /api/inventory/:id
 // @desc    Delete inventory item
-// @access  Private (Admin only)
-router.delete('/:id', auth, authorize('admin'), async (req, res) => {
+// @access  Private
+router.delete('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
 

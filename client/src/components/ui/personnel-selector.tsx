@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { User, Plus, Search, Check, X, Phone } from 'lucide-react'
-import { getAvailablePersonnel } from '@/utils/projectData'
+import { User, Plus, Search, Check, X, Phone, Loader2 } from 'lucide-react'
+import { usePersonnelRoles } from '@/hooks/useProjectDetail'
 
 interface PersonnelSelectorProps {
   value?: number | null // personnel_id
@@ -31,17 +31,19 @@ const PersonnelSelector: React.FC<PersonnelSelectorProps> = ({
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   
-  const personnel = getAvailablePersonnel()
-  const selectedPersonnel = value ? personnel.find(p => p.id === value) : null
+  // Use API to get personnel data
+  const { data: personnelRolesData, isLoading: personnelRolesLoading } = usePersonnelRoles()
+  const personnel = personnelRolesData?.personnel || []
+  const selectedPersonnel = value ? personnel.find((p: any) => p.id === value) : null
 
   // Filter personnel based on search query
-  const filteredPersonnel = personnel.filter(person => {
+  const filteredPersonnel = personnel.filter((person: any) => {
     if (!searchQuery) return true
     
     const query = searchQuery.toLowerCase()
     return (
       person.name.toLowerCase().includes(query) ||
-      person.contact_number.includes(query)
+      (person.contact_number && person.contact_number.includes(query))
     )
   })
 
@@ -99,15 +101,13 @@ const PersonnelSelector: React.FC<PersonnelSelectorProps> = ({
 
   const handleCreatePersonnel = () => {
     // In real app, this would call an API to create the personnel
-    const tempId = Math.max(...personnel.map(p => p.id)) + 1
+    const tempId = personnel.length > 0 ? Math.max(...personnel.map((p: any) => p.id)) + 1 : 1
     const createdPersonnel = {
       id: tempId,
       ...newPersonnel
     }
     
-    // Add to personnel array (in real app, this would be handled by state management)
-    personnel.push(createdPersonnel)
-    
+    // For now, just select the created personnel (in real app, this would be handled by proper API call)
     handlePersonnelSelect(createdPersonnel)
     setShowCreateForm(false)
     setNewPersonnel({

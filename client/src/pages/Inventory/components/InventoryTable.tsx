@@ -229,7 +229,7 @@ const InventoryTable = ({ filters }: InventoryTableProps) => {
                   <td className="py-4 px-4">
                     <div className="flex items-center gap-1 text-sm text-gray-600">
                       <MapPin className="h-3 w-3" />
-                      <span>{item.warehouse_location}</span>
+                      <span>{item.warehouse_location_name}</span>
                     </div>
                   </td>
 

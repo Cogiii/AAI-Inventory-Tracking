@@ -308,18 +308,31 @@ router.get('/locations', async (req, res) => {
  * Add personnel to project day(s)
  */
 router.post('/personnel', async (req, res) => {
-  const { project_day_ids, personnel_assignments } = req.body;
+  const { joNumber, project_day_ids, personnel_assignments } = req.body;
   
   try {
     // Validate required fields
-    if (!project_day_ids || !personnel_assignments || !Array.isArray(project_day_ids) || !Array.isArray(personnel_assignments)) {
+    if (!joNumber || !project_day_ids || !personnel_assignments || !Array.isArray(project_day_ids) || !Array.isArray(personnel_assignments)) {
       return res.status(400).json({
         success: false,
-        message: 'project_day_ids and personnel_assignments arrays are required'
+        message: 'joNumber, project_day_ids and personnel_assignments arrays are required'
       });
     }
 
+    // Get project ID from JO number
+    const projectQuery = 'SELECT id FROM project WHERE jo_number = ?';
+    const [projectRows] = await pool.execute(projectQuery, [joNumber]);
+    
+    if (projectRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found'
+      });
+    }
+    
+    const projectId = projectRows[0].id;
     const results = [];
+    const addedPersonnel = [];
     
     // Process each personnel assignment
     for (const assignment of personnel_assignments) {
@@ -328,6 +341,15 @@ router.post('/personnel', async (req, res) => {
       if (!personnel_id || !role_id) {
         continue; // Skip invalid assignments
       }
+
+      // Get personnel and role names for logging
+      const personnelQuery = 'SELECT name FROM personnel WHERE id = ?';
+      const roleQuery = 'SELECT name FROM role WHERE id = ?';
+      const [personnelResult] = await pool.execute(personnelQuery, [personnel_id]);
+      const [roleResult] = await pool.execute(roleQuery, [role_id]);
+      
+      const personnelName = personnelResult[0]?.name || 'Unknown';
+      const roleName = roleResult[0]?.name || 'Unknown';
 
       // Insert personnel for each specified project day
       for (const dayId of project_day_ids) {
@@ -356,6 +378,11 @@ router.post('/personnel', async (req, res) => {
               role_id,
               status: 'added'
             });
+            
+            // Track for logging
+            if (!addedPersonnel.some(p => p.personnel_id === personnel_id && p.role_id === role_id)) {
+              addedPersonnel.push({ personnel_name: personnelName, role_name: roleName });
+            }
           } else {
             results.push({
               project_day_id: dayId,
@@ -377,6 +404,20 @@ router.post('/personnel', async (req, res) => {
       }
     }
     
+    // Log the personnel addition activity
+    if (addedPersonnel.length > 0) {
+      const logDescription = `Added personnel: ${addedPersonnel.map(p => `${p.personnel_name} as ${p.role_name}`).join(', ')} to ${project_day_ids.length} project day(s)`;
+      
+      const logQuery = `
+        INSERT INTO project_log (project_id, log_type, description, recorded_by, created_at)
+        VALUES (?, 'activity', ?, ?, NOW())
+      `;
+      
+      // Note: In a real app, you'd get the user ID from authentication middleware
+      // For now, we'll use NULL or you can add a recorded_by field to the request
+      await pool.execute(logQuery, [projectId, logDescription, req.body.recorded_by || null]);
+    }
+    
     res.json({
       success: true,
       message: 'Personnel assignments processed',
@@ -393,13 +434,35 @@ router.post('/personnel', async (req, res) => {
 });
 
 /**
- * DELETE /api/project-detail/personnel/:projectDayId/:personnelId/:roleId
+ * DELETE /api/project-detail/personnel/:joNumber/:projectDayId/:personnelId/:roleId
  * Remove personnel from project day
  */
-router.delete('/personnel/:projectDayId/:personnelId/:roleId', async (req, res) => {
-  const { projectDayId, personnelId, roleId } = req.params;
+router.delete('/personnel/:joNumber/:projectDayId/:personnelId/:roleId', async (req, res) => {
+  const { joNumber, projectDayId, personnelId, roleId } = req.params;
   
   try {
+    // Get project ID and personnel/role names for logging
+    const projectQuery = 'SELECT id FROM project WHERE jo_number = ?';
+    const [projectRows] = await pool.execute(projectQuery, [joNumber]);
+    
+    if (projectRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found'
+      });
+    }
+    
+    const projectId = projectRows[0].id;
+    
+    // Get personnel and role names before deletion
+    const personnelQuery = 'SELECT name FROM personnel WHERE id = ?';
+    const roleQuery = 'SELECT name FROM role WHERE id = ?';
+    const [personnelResult] = await pool.execute(personnelQuery, [personnelId]);
+    const [roleResult] = await pool.execute(roleQuery, [roleId]);
+    
+    const personnelName = personnelResult[0]?.name || 'Unknown';
+    const roleName = roleResult[0]?.name || 'Unknown';
+    
     const deleteQuery = `
       DELETE FROM project_personnel 
       WHERE project_day_id = ? AND personnel_id = ? AND role_id = ?
@@ -413,6 +476,15 @@ router.delete('/personnel/:projectDayId/:personnelId/:roleId', async (req, res) 
         message: 'Personnel assignment not found'
       });
     }
+    
+    // Log the personnel removal activity
+    const logDescription = `Removed personnel: ${personnelName} (${roleName}) from project day`;
+    const logQuery = `
+      INSERT INTO project_log (project_id, project_day_id, log_type, description, recorded_by, created_at)
+      VALUES (?, ?, 'activity', ?, ?, NOW())
+    `;
+    
+    await pool.execute(logQuery, [projectId, projectDayId, logDescription, req.body?.recorded_by || null]);
     
     res.json({
       success: true,
@@ -621,18 +693,31 @@ router.delete('/project-days/:id', async (req, res) => {
  * Add items to project day(s)
  */
 router.post('/project-items', async (req, res) => {
-  const { project_day_ids, item_assignments } = req.body;
+  const { joNumber, project_day_ids, item_assignments } = req.body;
   
   try {
     // Validate required fields
-    if (!project_day_ids || !item_assignments || !Array.isArray(project_day_ids) || !Array.isArray(item_assignments)) {
+    if (!joNumber || !project_day_ids || !item_assignments || !Array.isArray(project_day_ids) || !Array.isArray(item_assignments)) {
       return res.status(400).json({
         success: false,
-        message: 'project_day_ids and item_assignments arrays are required'
+        message: 'joNumber, project_day_ids and item_assignments arrays are required'
       });
     }
 
+    // Get project ID from JO number
+    const projectQuery = 'SELECT id FROM project WHERE jo_number = ?';
+    const [projectRows] = await pool.execute(projectQuery, [joNumber]);
+    
+    if (projectRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found'
+      });
+    }
+    
+    const projectId = projectRows[0].id;
     const results = [];
+    const addedItems = [];
     
     // Process each item assignment
     for (const assignment of item_assignments) {
@@ -642,8 +727,8 @@ router.post('/project-items', async (req, res) => {
         continue; // Skip invalid assignments
       }
 
-      // Check item availability
-      const itemQuery = 'SELECT available_quantity FROM item WHERE id = ?';
+      // Check item availability and get item name
+      const itemQuery = 'SELECT available_quantity, name FROM item WHERE id = ?';
       const [itemResult] = await pool.execute(itemQuery, [item_id]);
       
       if (itemResult.length === 0) {
@@ -656,6 +741,7 @@ router.post('/project-items', async (req, res) => {
       }
 
       const availableQuantity = itemResult[0].available_quantity;
+      const itemName = itemResult[0].name;
       const totalNeeded = allocated_quantity * project_day_ids.length;
 
       if (availableQuantity < totalNeeded) {
@@ -699,6 +785,11 @@ router.post('/project-items', async (req, res) => {
               allocated_quantity,
               status: 'added'
             });
+            
+            // Track for logging
+            if (!addedItems.some(i => i.item_id === item_id)) {
+              addedItems.push({ item_name: itemName, allocated_quantity });
+            }
           } else {
             // Update existing assignment
             const existingQuantity = checkResult[0].allocated_quantity;
@@ -722,6 +813,11 @@ router.post('/project-items', async (req, res) => {
               allocated_quantity: newQuantity,
               status: 'updated'
             });
+            
+            // Track for logging
+            if (!addedItems.some(i => i.item_id === item_id)) {
+              addedItems.push({ item_name: itemName, allocated_quantity });
+            }
           }
         } catch (error) {
           console.error('Error adding item assignment:', error);
@@ -733,6 +829,18 @@ router.post('/project-items', async (req, res) => {
           });
         }
       }
+    }
+    
+    // Log the item addition activity
+    if (addedItems.length > 0) {
+      const logDescription = `Added items: ${addedItems.map(i => `${i.item_name} (${i.allocated_quantity})`).join(', ')} to ${project_day_ids.length} project day(s)`;
+      
+      const logQuery = `
+        INSERT INTO project_log (project_id, log_type, description, recorded_by, created_at)
+        VALUES (?, 'activity', ?, ?, NOW())
+      `;
+      
+      await pool.execute(logQuery, [projectId, logDescription, req.body.recorded_by || null]);
     }
     
     res.json({

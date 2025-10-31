@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Shield, Plus, Search, Check, X, Crown, HardHat, Users, AlertTriangle } from 'lucide-react'
-import { getAvailableRoles } from '@/utils/projectData'
+import { usePersonnelRoles } from '@/hooks/useProjectDetail'
 
 interface RoleSelectorProps {
   value?: number | null // role_id
@@ -42,11 +42,13 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
     }
   }
   
-  const roles = getAvailableRoles()
-  const selectedRole = value ? roles.find(r => r.id === value) : null
+  // Use API to get roles data
+  const { data: personnelRolesData } = usePersonnelRoles()
+  const roles = personnelRolesData?.roles || []
+  const selectedRole = value ? roles.find((r: any) => r.id === value) : null
 
   // Filter roles based on search query
-  const filteredRoles = roles.filter(role => {
+  const filteredRoles = roles.filter((role: any) => {
     if (!searchQuery) return true
     
     const query = searchQuery.toLowerCase()
@@ -99,16 +101,14 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
 
   const handleCreateRole = () => {
     // In real app, this would call an API to create the role
-    const tempId = Math.max(...roles.map(r => r.id)) + 1
+    const tempId = roles.length > 0 ? Math.max(...roles.map((r: any) => r.id)) + 1 : 1
     const createdRole = {
       id: tempId,
       name: newRole.name,
       description: newRole.description
     }
     
-    // Add to roles array (in real app, this would be handled by state management)
-    roles.push(createdRole)
-    
+    // For now, just select the created role (in real app, this would be handled by proper API call)
     handleRoleSelect(createdRole)
     setShowCreateForm(false)
     setNewRole({

@@ -11,7 +11,7 @@ interface InventoryFiltersProps {
 
 const InventoryFilters: FC<InventoryFiltersProps> = ({
   filters,
-  onFiltersChange
+  onFiltersChangef
 }) => {
   // Fetch dynamic data for dropdowns
   const { data: brandsResponse, error: brandsError, isLoading: brandsLoading, isError: brandsIsError } = useBrands()
