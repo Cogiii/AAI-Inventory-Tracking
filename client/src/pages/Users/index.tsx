@@ -1,107 +1,52 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { FC } from 'react';
-import { Plus, UserCheck, Users as UsersIcon } from 'lucide-react';
+import { Plus, UserCheck, Users as UsersIcon, Shield, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
+import { useUsers, usePositions } from '@/hooks/useUsers';
+import type { User as ApiUser } from '@/services/api/users';
 
 import UserFilters from './components/UserFilters';
 import UserTable from './components/UserTable';
 import UserModals from './components/UserModals';
 import UserDetailModal from './components/UserDetailModal';
 import ConfirmationModal from './components/ConfirmationModal';
-
-// Mock data based on database schema
-const mockUsers = [
-  {
-    id: 1,
-    first_name: 'Admin',
-    last_name: 'User',
-    email: 'admin@aai.com',
-    username: 'admin',
-    position_id: 1,
-    position_name: 'Administrator',
-    is_active: true,
-    created_at: '2024-01-15T08:30:00Z',
-    updated_at: '2024-01-15T08:30:00Z'
-  },
-  {
-    id: 2,
-    first_name: 'Maria',
-    last_name: 'Santos',
-    email: 'manager@aai.com',
-    username: 'msantos',
-    position_id: 2,
-    position_name: 'Marketing Manager',
-    is_active: true,
-    created_at: '2024-01-16T09:15:00Z',
-    updated_at: '2024-01-16T09:15:00Z'
-  },
-  {
-    id: 3,
-    first_name: 'John',
-    last_name: 'Cruz',
-    email: 'user@aai.com',
-    username: 'jcruz',
-    position_id: 3,
-    position_name: 'Staff Member',
-    is_active: true,
-    created_at: '2024-01-17T10:00:00Z',
-    updated_at: '2024-01-17T10:00:00Z'
-  },
-  {
-    id: 4,
-    first_name: 'Sarah',
-    last_name: 'Johnson',
-    email: 'sarah.johnson@aai.com',
-    username: 'sjohnson',
-    position_id: 2,
-    position_name: 'Marketing Manager',
-    is_active: false,
-    created_at: '2024-01-18T11:30:00Z',
-    updated_at: '2024-01-20T14:15:00Z'
-  },
-  {
-    id: 5,
-    first_name: 'Michael',
-    last_name: 'Brown',
-    email: 'michael.brown@aai.com',
-    username: 'mbrown',
-    position_id: 3,
-    position_name: 'Staff Member',
-    is_active: true,
-    created_at: '2024-01-19T13:45:00Z',
-    updated_at: '2024-01-19T13:45:00Z'
-  }
-];
-
-const mockPositions = [
-  { id: 1, name: 'Administrator' },
-  { id: 2, name: 'Marketing Manager' },
-  { id: 3, name: 'Staff Member' }
-];
-
-interface User {
-  id: number;
-  first_name: string;
-  last_name: string;
-  email: string;
-  username: string;
-  position_id: number;
-  position_name: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
+import PositionModal from './components/PositionModal';
 
 const UserManagement: FC = () => {
   const { user: currentUser } = useAuth();
-  const [users, setUsers] = useState<User[]>(mockUsers);
+  const {
+    users,
+    loading: usersLoading,
+    error: usersError,
+    pagination,
+    fetchUsers,
+    toggleUserStatus,
+    deleteUser,
+    hasPermission
+  } = useUsers();
+  
+  const {
+    positions,
+    loading: positionsLoading,
+    error: positionsError,
+    createPosition,
+    updatePosition,
+    deletePosition,
+    canEditPosition
+  } = usePositions();
+
+  // Local state for UI control
   const [searchTerm, setSearchTerm] = useState('');
   const [filterPosition, setFilterPosition] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [viewingUser, setViewingUser] = useState<User | null>(null);
+  const [selectedUser, setSelectedUser] = useState<ApiUser | null>(null);
+  const [viewingUser, setViewingUser] = useState<ApiUser | null>(null);
+  const [showPositionModal, setShowPositionModal] = useState(false);
+  const [selectedPosition, setSelectedPosition] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'users' | 'positions'>('users');
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean;
     type: 'delete' | 'deactivate' | 'activate' | 'update';
@@ -110,37 +55,42 @@ const UserManagement: FC = () => {
     onConfirm: () => void;
   } | null>(null);
 
-  // Role-based user filtering
-  const roleFilteredUsers = currentUser?.role === 'Administrator' 
-    ? users 
-    : users.filter(user => user.position_name !== 'Administrator');
+  // Check if user has permission to access this page
+  useEffect(() => {
+    if (!hasPermission) {
+      // Redirect or show access denied
+      return;
+    }
+  }, [hasPermission]);
 
-  // Filter users based on search and filters
-  const filteredUsers = roleFilteredUsers.filter(user => {
-    const matchesSearch = 
-      user.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.username.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesPosition = filterPosition === 'all' || user.position_id.toString() === filterPosition;
-    const matchesStatus = filterStatus === 'all' || 
-      (filterStatus === 'active' && user.is_active) ||
-      (filterStatus === 'inactive' && !user.is_active);
-    
-    return matchesSearch && matchesPosition && matchesStatus;
+  // Fetch users when filters change
+  useEffect(() => {
+    if (hasPermission) {
+      fetchUsers({
+        page: currentPage,
+        limit: 10,
+        search: searchTerm,
+        position_id: filterPosition
+      });
+    }
+  }, [currentPage, searchTerm, filterPosition, fetchUsers, hasPermission]);
+
+  // Filter users by status (client-side filter since it's not in API yet)
+  const filteredUsers = users.filter(user => {
+    if (filterStatus === 'all') return true;
+    return filterStatus === 'active' ? user.is_active : !user.is_active;
   });
 
-  const handleViewUser = (user: User) => {
+  const handleViewUser = (user: ApiUser) => {
     setViewingUser(user);
   };
 
-  const handleEditUser = (user: User) => {
+  const handleEditUser = (user: ApiUser) => {
     setSelectedUser(user);
     setViewingUser(null);
   };
 
-  const handleToggleUserStatus = (userId: number) => {
+  const handleToggleUserStatus = async (userId: number) => {
     const user = users.find(u => u.id === userId);
     if (!user) return;
 
@@ -149,19 +99,19 @@ const UserManagement: FC = () => {
       type: user.is_active ? 'deactivate' : 'activate',
       title: `${user.is_active ? 'Deactivate' : 'Activate'} User`,
       message: `Are you sure you want to ${user.is_active ? 'deactivate' : 'activate'} ${user.first_name} ${user.last_name}?`,
-      onConfirm: () => {
-        setUsers(prev => prev.map(u => 
-          u.id === userId 
-            ? { ...u, is_active: !u.is_active, updated_at: new Date().toISOString() }
-            : u
-        ));
-        setConfirmationModal(null);
-        setViewingUser(null);
+      onConfirm: async () => {
+        try {
+          await toggleUserStatus(userId);
+          setConfirmationModal(null);
+          setViewingUser(null);
+        } catch (error) {
+          console.error('Error toggling user status:', error);
+        }
       }
     });
   };
 
-  const handleDeleteUser = (userId: number) => {
+  const handleDeleteUser = async (userId: number) => {
     const user = users.find(u => u.id === userId);
     if (!user) return;
 
@@ -170,10 +120,35 @@ const UserManagement: FC = () => {
       type: 'delete',
       title: 'Delete User',
       message: `Are you sure you want to delete ${user.first_name} ${user.last_name}? This action cannot be undone.`,
-      onConfirm: () => {
-        setUsers(prev => prev.filter(u => u.id !== userId));
-        setConfirmationModal(null);
-        setViewingUser(null);
+      onConfirm: async () => {
+        try {
+          await deleteUser(userId);
+          setConfirmationModal(null);
+          setViewingUser(null);
+        } catch (error) {
+          console.error('Error deleting user:', error);
+        }
+      }
+    });
+  };
+
+  const handleDeletePosition = async (positionId: number) => {
+    const position = positions.find(p => p.id === positionId);
+    if (!position) return;
+
+    setConfirmationModal({
+      isOpen: true,
+      type: 'delete',
+      title: 'Delete Position',
+      message: `Are you sure you want to delete the position "${position.name}"? This action cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          await deletePosition(positionId);
+          setConfirmationModal(null);
+          setSelectedPosition(null);
+        } catch (error) {
+          console.error('Error deleting position:', error);
+        }
       }
     });
   };
@@ -181,7 +156,7 @@ const UserManagement: FC = () => {
   const userStats = [
     {
       title: 'Total Users',
-      value: users.length,
+      value: pagination.totalItems,
       description: 'Registered users',
       icon: UsersIcon
     },
@@ -192,18 +167,31 @@ const UserManagement: FC = () => {
       icon: UserCheck
     },
     {
+      title: 'Positions',
+      value: positions.length,
+      description: 'Available roles',
+      icon: Shield
+    },
+    {
       title: 'Administrators',
       value: users.filter(u => u.position_name === 'Administrator').length,
       description: 'Admin accounts',
-      icon: UsersIcon
-    },
-    {
-      title: 'Marketing Managers',
-      value: users.filter(u => u.position_name === 'Marketing Manager').length,
-      description: 'Manager accounts',
-      icon: UsersIcon
+      icon: Settings
     }
   ];
+
+  // Show access denied if user doesn't have permission
+  if (!hasPermission) {
+    return (
+      <div className="space-y-6 p-7">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+          <Shield className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-red-700 mb-2">Access Denied</h2>
+          <p className="text-red-600">You do not have permission to access user management.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 p-7">
@@ -214,13 +202,51 @@ const UserManagement: FC = () => {
             <h1 className="text-2xl font-semibold text-gray-custom">User Management</h1>
             <p className="text-gray-600 mt-1">Manage system users, roles, and permissions</p>
           </div>
-          <Button 
-            onClick={() => setShowAddModal(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white"
+          <div className="flex gap-2">
+            {activeTab === 'users' ? (
+              <Button 
+                onClick={() => setShowAddModal(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add User
+              </Button>
+            ) : (
+              <Button 
+                onClick={() => setShowPositionModal(true)}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Position
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="flex border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`px-4 py-2 font-medium text-sm ${
+              activeTab === 'users'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
           >
-            <Plus className="w-4 h-4 mr-2" />
-            Add User
-          </Button>
+            <UsersIcon className="w-4 h-4 inline mr-2" />
+            Users
+          </button>
+          <button
+            onClick={() => setActiveTab('positions')}
+            className={`px-4 py-2 font-medium text-sm ${
+              activeTab === 'positions'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Shield className="w-4 h-4 inline mr-2" />
+            Positions & Permissions
+          </button>
         </div>
 
         {/* Statistics Cards */}
@@ -242,23 +268,115 @@ const UserManagement: FC = () => {
         </div>
       </div>
 
-      {/* Filters */}
-      <UserFilters
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        filterPosition={filterPosition}
-        onPositionFilterChange={setFilterPosition}
-        filterStatus={filterStatus}
-        onStatusFilterChange={setFilterStatus}
-        positions={mockPositions}
-      />
+      {/* Content based on active tab */}
+      {activeTab === 'users' ? (
+        <>
+          {/* Filters */}
+          <UserFilters
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            filterPosition={filterPosition}
+            onPositionFilterChange={setFilterPosition}
+            filterStatus={filterStatus}
+            onStatusFilterChange={setFilterStatus}
+            positions={positions.map(p => ({ id: p.id, name: p.name }))}
+          />
 
-      {/* Users Table */}
-      <UserTable
-        users={filteredUsers}
-        onViewUser={handleViewUser}
-        currentUserRole={currentUser?.role}
-      />
+          {/* Users Table */}
+          {usersLoading ? (
+            <div className="bg-white rounded-lg p-8 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="text-gray-500 mt-2">Loading users...</p>
+            </div>
+          ) : usersError ? (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-red-600">{usersError}</p>
+            </div>
+          ) : (
+            <UserTable
+              users={filteredUsers as any[]}
+              onViewUser={handleViewUser as any}
+              pagination={pagination}
+              onPageChange={setCurrentPage}
+            />
+          )}
+        </>
+      ) : (
+        /* Position Management */
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="p-6 border-b border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900">Position Management</h3>
+            <p className="text-gray-600 mt-1">Manage system positions and their permissions</p>
+          </div>
+          
+          <div className="p-6">
+            {positionsLoading ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="text-gray-500 mt-2">Loading positions...</p>
+              </div>
+            ) : positionsError ? (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <p className="text-red-600">{positionsError}</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {positions.map((position) => (
+                  <div key={position.id} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-semibold text-gray-900">{position.name}</h4>
+                        <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                          {Object.entries(position.permissions)
+                            .filter(([, value]) => Boolean(value))
+                            .map(([key]) => (
+                              <span key={key} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                {key
+                                  .replace(/can/i, '')
+                                  .replace(/([A-Z])/g, ' $1')
+                                  .trim()
+                                  .replace(/^./, str => str.toUpperCase())
+                                }
+                              </span>
+                            ))
+                          }
+                          {Object.values(position.permissions).every(value => !Boolean(value)) && (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                              No permissions assigned
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {canEditPosition(position) && (
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => {
+                              setSelectedPosition(position);
+                              setShowPositionModal(true);
+                            }}
+                            variant="outline"
+                            size="sm"
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            onClick={() => handleDeletePosition(position.id)}
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Modals */}
       <UserModals
@@ -266,19 +384,33 @@ const UserManagement: FC = () => {
         selectedUser={selectedUser}
         onCloseAddModal={() => setShowAddModal(false)}
         onCloseEditModal={() => setSelectedUser(null)}
-        currentUserRole={currentUser?.role}
-        positions={mockPositions}
+        currentUserRole={currentUser?.positionName}
+        positions={positions.map(p => ({ id: p.id, name: p.name }))}
       />
 
       <UserDetailModal
         isOpen={!!viewingUser}
         onClose={() => setViewingUser(null)}
         user={viewingUser}
-        currentUserRole={currentUser?.role}
-        onEdit={handleEditUser}
+        currentUserRole={currentUser?.positionName}
+        onEdit={handleEditUser as any}
         onToggleStatus={handleToggleUserStatus}
         onDelete={handleDeleteUser}
       />
+
+      {/* Position Modal */}
+      {(showPositionModal || selectedPosition) && (
+        <PositionModal
+          isOpen={showPositionModal || !!selectedPosition}
+          onClose={() => {
+            setShowPositionModal(false);
+            setSelectedPosition(null);
+          }}
+          position={selectedPosition}
+          onCreatePosition={createPosition}
+          onUpdatePosition={updatePosition}
+        />
+      )}
 
       {confirmationModal && (
         <ConfirmationModal

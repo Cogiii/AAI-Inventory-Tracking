@@ -49,19 +49,46 @@ export const deleteInventoryItem = async (id: string | number) => {
 // Get brands for dropdown
 export const getBrands = async () => {
   const { data } = await api.get('/inventory/brands');
-  return data;
+  return data;  
 };
 
 // Get warehouse locations for dropdown
 export const getLocations = async () => {
   const { data } = await api.get('/inventory/locations');
-  console.log("DASDASDASDASDSA", data)
   return data;
 };
 
 // Get inventory statistics
 export const getInventoryStats = async () => {
   const { data } = await api.get('/inventory/stats');
+  return data;
+};
+
+// Update item quantity
+export const updateItemQuantity = async (id: string | number, quantityData: { delivered_quantity: number }) => {
+  const { data } = await api.put(`/inventory/${id}/quantity`, quantityData);
+  return data;
+};
+
+// Move item location
+export const moveItemLocation = async (id: string | number, locationData: { warehouse_location_id: number }) => {
+  const { data } = await api.put(`/inventory/${id}/location`, locationData);
+  return data;
+};
+
+// Report issue (damage or loss)
+export const reportItemIssue = async (id: string | number, issueData: {
+  issue_type: 'damage' | 'loss';
+  quantity: number;
+  description?: string;
+}) => {
+  const { data } = await api.post(`/inventory/${id}/issue`, issueData);
+  return data;
+};
+
+// Get activity logs for item
+export const getItemActivity = async (id: string | number) => {
+  const { data } = await api.get(`/inventory/${id}/activity`);
   return data;
 };
 

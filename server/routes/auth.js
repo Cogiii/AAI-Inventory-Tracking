@@ -84,8 +84,8 @@ router.post('/login', validate(schemas.loginUser), async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    // Find user by username
-    const user = await UserService.findByUsername(username);
+    // Find user by username with permissions
+    const user = await UserService.findByUsernameWithPermissions(username);
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -102,7 +102,7 @@ router.post('/login', validate(schemas.loginUser), async (req, res) => {
     }
 
     // Verify password
-    const isMatch = await comparePassword(password, user.password_hash || user.password);
+    const isMatch = await comparePassword(password, user.password_hash);
     if (!isMatch) {
       return res.status(401).json({
         success: false,
@@ -121,7 +121,7 @@ router.post('/login', validate(schemas.loginUser), async (req, res) => {
     });
 
     // Remove password from response
-    const { password: _, ...userResponse } = user;
+    const { password_hash: _, ...userResponse } = user;
 
     res.json({
       success: true,
@@ -146,7 +146,9 @@ router.post('/login', validate(schemas.loginUser), async (req, res) => {
 // @access  Private
 router.get('/me', auth, async (req, res) => {
   try {
-    const user = await UserService.findById(req.user.id);
+    // The auth middleware already provides the complete user object with permissions
+    // No need to query the database again
+    const user = req.user;
     
     if (!user) {
       return res.status(404).json({
@@ -155,13 +157,10 @@ router.get('/me', auth, async (req, res) => {
       });
     }
 
-    // Remove password from response
-    const { password: _, ...userResponse } = user;
-
     res.json({
       success: true,
       data: {
-        user: userResponse
+        user: user
       }
     });
 

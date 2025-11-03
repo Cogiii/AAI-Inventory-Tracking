@@ -29,7 +29,7 @@ const NotFoundPage: FC = () => {
           <Button asChild variant="default" size="lg">
             <Link to="/dashboard" className="flex items-center">
               <Home className="mr-2 h-5 w-5" />
-              Go to Dashboard
+              Go to Home
             </Link>
           </Button>
           

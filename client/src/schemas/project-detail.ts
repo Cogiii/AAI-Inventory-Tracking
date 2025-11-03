@@ -16,7 +16,6 @@ export const AddPersonnelFormSchema = z.object({
 export const AddProjectDaySchema = z.object({
   project_date: z.string().min(1, 'Project date is required'),
   location_id: z.number().nullable().optional(),
-  status: z.enum(['scheduled', 'ongoing', 'completed']),
 });
 
 export const UpdateProjectDaySchema = z.object({
@@ -28,7 +27,7 @@ export const UpdateProjectDaySchema = z.object({
 export const ItemAssignmentSchema = z.object({
   item_id: z.number().min(1, 'Item is required'),
   allocated_quantity: z.number().min(1, 'Allocated quantity must be at least 1'),
-  status: z.string().default('allocated'),
+  status: z.enum(['allocated', 'returned']).default('allocated'),
 });
 
 export const AddProjectItemsSchema = z.object({
@@ -42,7 +41,7 @@ export const UpdateProjectItemSchema = z.object({
   damaged_quantity: z.number().min(0).optional(),
   lost_quantity: z.number().min(0).optional(),
   returned_quantity: z.number().min(0).optional(),
-  status: z.enum(['allocated', 'in_use', 'partial_return', 'returned', 'damaged']).optional(),
+  status: z.enum(['allocated', 'returned']).optional(),
 });
 
 // Export types

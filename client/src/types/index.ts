@@ -9,7 +9,7 @@ export interface BaseEntity {
 export interface User {
   id: number;
   email: string;
-  role: UserRole;
+  role?: UserRole; // Keep for backward compatibility
   username: string;
   created_at: string;
   updated_at: string;
@@ -18,6 +18,22 @@ export interface User {
   last_name?: string;
   name?: string;
   lastLogin?: string;
+  positionId?: number;
+  positionName?: string;
+  permissions?: {
+    canManageProjects: boolean;
+    canEditProject: boolean;
+    canAddProject: boolean;
+    canDeleteProject: boolean;
+    canManageInventory: boolean;
+    canAddInventory: boolean;
+    canEditInventory: boolean;
+    canDeleteInventory: boolean;
+    canManageUsers: boolean;
+    canEditUser: boolean;
+    canAddUser: boolean;
+    canDeleteUser: boolean;
+  };
 }
 
 export type UserRole = 'Administrator' | 'Marketing Manager' | 'Staff Member';

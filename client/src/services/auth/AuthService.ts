@@ -26,7 +26,10 @@ const transformApiUser = (apiUser: any): User => {
     first_name,
     last_name,
     name,
-    lastLogin
+    lastLogin,
+    positionId,
+    positionName,
+    permissions
   } = apiUser;
 
   return {
@@ -40,7 +43,10 @@ const transformApiUser = (apiUser: any): User => {
     first_name,
     last_name,
     name,
-    lastLogin
+    lastLogin,
+    positionId,
+    positionName,
+    permissions
   };
 };
 

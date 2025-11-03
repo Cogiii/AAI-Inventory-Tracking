@@ -11,7 +11,7 @@ interface InventoryFiltersProps {
 
 const InventoryFilters: FC<InventoryFiltersProps> = ({
   filters,
-  onFiltersChangef
+  onFiltersChange
 }) => {
   // Fetch dynamic data for dropdowns
   const { data: brandsResponse, error: brandsError, isLoading: brandsLoading, isError: brandsIsError } = useBrands()
@@ -23,21 +23,20 @@ const InventoryFilters: FC<InventoryFiltersProps> = ({
   const brands = Array.isArray(brandsResponse?.data?.brands) ? brandsResponse.data.brands : []
   const locations = Array.isArray(locationsResponse?.data?.locations) ? locationsResponse.data.locations : []
 
-  // Debug logging for development
-  if (process.env.NODE_ENV === 'development') {
-    console.log('=== INVENTORY FILTERS DEBUG ===')
-    console.log('Brands Loading:', brandsLoading)
-    console.log('Brands Response:', brandsResponse)
-    console.log('Brands Array Length:', brands.length)
-    console.log('Brands Array:', brands)
-    console.log('Locations Loading:', locationsLoading)
-    console.log('Locations Response:', locationsResponse)
-    console.log('Locations Array Length:', locations.length)
-    console.log('Locations Array:', locations)
-    if (brandsError) console.error('Brands Error:', brandsError)
-    if (locationsError) console.error('Locations Error:', locationsError)
-    console.log('===============================')
-  }
+  // if (process.env.NODE_ENV === 'development') {
+  //   console.log('=== INVENTORY FILTERS DEBUG ===')
+  //   console.log('Brands Loading:', brandsLoading)
+  //   console.log('Brands Response:', brandsResponse)
+  //   console.log('Brands Array Length:', brands.length)
+  //   console.log('Brands Array:', brands)
+  //   console.log('Locations Loading:', locationsLoading)
+  //   console.log('Locations Response:', locationsResponse)
+  //   console.log('Locations Array Length:', locations.length)
+  //   console.log('Locations Array:', locations)
+  //   if (brandsError) console.error('Brands Error:', brandsError)
+  //   if (locationsError) console.error('Locations Error:', locationsError)
+  //   console.log('===============================')
+  // }
 
   const handleSearchChange = (value: string) => {
     onFiltersChange({ ...filters, search: value })

@@ -1,5 +1,6 @@
 const express = require('express');
 const { pool } = require('../config/database');
+const { auth } = require('../middleware/auth');
 const router = express.Router();
 
 /**
@@ -198,9 +199,6 @@ router.get('/items/:joNumber', async (req, res) => {
     
     const [itemsRows] = await pool.execute(availableItemsQuery);
     
-    console.log(`[DEBUG] Found ${itemsRows.length} items in database`);
-    console.log(`[DEBUG] Sample items:`, itemsRows.slice(0, 3));
-    
     res.json({
       success: true,
       data: itemsRows
@@ -261,6 +259,23 @@ router.get('/personnel', async (req, res) => {
       message: 'Internal server error' 
     });
   }
+});
+
+/**
+ * GET /api/project-detail/debug-permissions
+ * Debug endpoint to check user permissions (remove in production)
+ */
+router.get('/debug-permissions', auth, async (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      user: req.user,
+      hasPermissions: !!req.user?.permissions,
+      permissions: req.user?.permissions || null,
+      canManageProjects: req.user?.permissions?.canManageProjects,
+      canEditProject: req.user?.permissions?.canEditProject
+    }
+  });
 });
 
 /**
@@ -540,6 +555,27 @@ router.post('/project-days', async (req, res) => {
     
     const [result] = await pool.execute(insertQuery, [project_id, project_date, location_id]);
     
+    // Log the project day creation activity
+    let locationName = '';
+    if (location_id) {
+      const locationQuery = 'SELECT name FROM location WHERE id = ?';
+      const [locationResult] = await pool.execute(locationQuery, [location_id]);
+      locationName = locationResult[0]?.name || 'Unknown Location';
+    }
+    
+    const logQuery = `
+      INSERT INTO project_log (project_id, project_day_id, log_type, description, recorded_by, created_at)
+      VALUES (?, ?, 'activity', ?, ?, NOW())
+    `;
+    
+    const formattedDate = new Date(project_date).toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    const logDescription = `Project day added for ${formattedDate}${locationName ? ` at ${locationName}` : ''}`;
+    await pool.execute(logQuery, [project_id, result.insertId, logDescription, req.user?.id || null]);
+    
     // Fetch the created project day with location details
     const fetchQuery = `
       SELECT 
@@ -591,6 +627,24 @@ router.put('/project-days/:id', async (req, res) => {
       });
     }
 
+    // Get original project day data for logging
+    const originalQuery = `
+      SELECT pd.project_id, pd.project_date, pd.location_id, l.name as location_name
+      FROM project_day pd
+      LEFT JOIN location l ON pd.location_id = l.id
+      WHERE pd.id = ?
+    `;
+    const [originalResult] = await pool.execute(originalQuery, [id]);
+    
+    if (originalResult.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project day not found'
+      });
+    }
+
+    const originalData = originalResult[0];
+
     // Update project day
     const updateQuery = `
       UPDATE project_day 
@@ -600,11 +654,38 @@ router.put('/project-days/:id', async (req, res) => {
     
     const [result] = await pool.execute(updateQuery, [project_date, location_id, id]);
     
-    if (result.affectedRows === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Project day not found'
+    // Log the project day update activity
+    const changes = [];
+    if (originalData.project_date !== project_date) {
+      const originalFormatted = new Date(originalData.project_date).toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
       });
+      const newFormatted = new Date(project_date).toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+      changes.push(`date changed from ${originalFormatted} to ${newFormatted}`);
+    }
+    if (originalData.location_id !== location_id) {
+      const newLocationQuery = 'SELECT name FROM location WHERE id = ?';
+      let newLocationName = 'No location';
+      if (location_id) {
+        const [locationResult] = await pool.execute(newLocationQuery, [location_id]);
+        newLocationName = locationResult[0]?.name || 'Unknown location';
+      }
+      changes.push(`location changed from ${originalData.location_name || 'No location'} to ${newLocationName}`);
+    }
+    
+    if (changes.length > 0) {
+      const logQuery = `
+        INSERT INTO project_log (project_id, project_day_id, log_type, description, recorded_by, created_at)
+        VALUES (?, ?, 'activity', ?, ?, NOW())
+      `;
+      const logDescription = `Project day updated: ${changes.join(', ')}`;
+      await pool.execute(logQuery, [originalData.project_id, id, logDescription, req.user?.id || null]);
     }
 
     // Fetch the updated project day with location details
@@ -663,16 +744,40 @@ router.delete('/project-days/:id', async (req, res) => {
       });
     }
 
-    // Delete project day
-    const deleteQuery = 'DELETE FROM project_day WHERE id = ?';
-    const [result] = await pool.execute(deleteQuery, [id]);
+    // Get project day data for logging before deletion
+    const projectDayQuery = `
+      SELECT pd.project_id, pd.project_date, l.name as location_name
+      FROM project_day pd
+      LEFT JOIN location l ON pd.location_id = l.id
+      WHERE pd.id = ?
+    `;
+    const [projectDayResult] = await pool.execute(projectDayQuery, [id]);
     
-    if (result.affectedRows === 0) {
+    if (projectDayResult.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Project day not found'
       });
     }
+
+    const projectDayData = projectDayResult[0];
+
+    // Delete project day
+    const deleteQuery = 'DELETE FROM project_day WHERE id = ?';
+    const [result] = await pool.execute(deleteQuery, [id]);
+    
+    // Log the project day deletion activity
+    const logQuery = `
+      INSERT INTO project_log (project_id, project_day_id, log_type, description, recorded_by, created_at)
+      VALUES (?, NULL, 'activity', ?, ?, NOW())
+    `;
+    const formattedDate = new Date(projectDayData.project_date).toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    const logDescription = `Project day deleted: ${formattedDate}${projectDayData.location_name ? ` at ${projectDayData.location_name}` : ''}`;
+    await pool.execute(logQuery, [projectDayData.project_id, logDescription, req.user?.id || null]);
     
     res.json({
       success: true,
@@ -692,7 +797,21 @@ router.delete('/project-days/:id', async (req, res) => {
  * POST /api/project-detail/project-items
  * Add items to project day(s)
  */
-router.post('/project-items', async (req, res) => {
+router.post('/project-items', auth, async (req, res) => {
+  // Check permissions - user must be able to manage projects or add to projects
+  const userPermissions = req.user?.permissions;
+  
+  // Allow if user is Administrator or has proper permissions
+  const isAdmin = req.user?.positionName === 'Administrator';
+  const hasPermissions = userPermissions && (userPermissions.canManageProjects || userPermissions.canAddProject);
+  
+  if (!isAdmin && !hasPermissions) {
+    return res.status(403).json({
+      success: false,
+      message: 'Insufficient permissions to add project items'
+    });
+  }
+
   const { joNumber, project_day_ids, item_assignments } = req.body;
   
   try {
@@ -721,7 +840,7 @@ router.post('/project-items', async (req, res) => {
     
     // Process each item assignment
     for (const assignment of item_assignments) {
-      const { item_id, allocated_quantity, status = 'allocated' } = assignment;
+      const { item_id, allocated_quantity, status = 'pending' } = assignment;
       
       if (!item_id || !allocated_quantity) {
         continue; // Skip invalid assignments
@@ -862,13 +981,50 @@ router.post('/project-items', async (req, res) => {
  * PUT /api/project-detail/project-items/:id
  * Update project item quantities
  */
-router.put('/project-items/:id', async (req, res) => {
+router.put('/project-items/:id', auth, async (req, res) => {
+  // Check permissions - user must be able to manage projects or edit projects
+  const userPermissions = req.user?.permissions;
+  
+  // Debug logging
+  console.log('PUT project-items - User permissions:', userPermissions);
+  console.log('PUT project-items - User position name:', req.user?.positionName);
+  
+  // Allow access for Administrator position or if they have the right permissions
+  if (!req.user) {
+    return res.status(403).json({
+      success: false,
+      message: 'Authentication required'
+    });
+  }
+  
+  // Allow if user is Administrator or has proper permissions
+  const isAdmin = req.user.positionName === 'Administrator';
+  const hasPermissions = userPermissions && (userPermissions.canManageProjects || userPermissions.canEditProject);
+  
+  if (!isAdmin && !hasPermissions) {
+    return res.status(403).json({
+      success: false,
+      message: 'Insufficient permissions to update project items',
+      debug: {
+        isAdmin,
+        hasPermissions,
+        positionName: req.user.positionName,
+        permissions: userPermissions
+      }
+    });
+  }
   const { id } = req.params;
   const { allocated_quantity, damaged_quantity, lost_quantity, returned_quantity, status } = req.body;
   
   try {
-    // Get current item data
-    const getCurrentQuery = 'SELECT * FROM project_item WHERE id = ?';
+    // Get current item data with related info for logging
+    const getCurrentQuery = `
+      SELECT pi.*, pd.project_id, i.name as item_name
+      FROM project_item pi
+      JOIN project_day pd ON pi.project_day_id = pd.id
+      JOIN item i ON pi.item_id = i.id
+      WHERE pi.id = ?
+    `;
     const [currentResult] = await pool.execute(getCurrentQuery, [id]);
     
     if (currentResult.length === 0) {
@@ -912,6 +1068,33 @@ router.put('/project-items/:id', async (req, res) => {
       const updateReturnQuery = 'UPDATE item SET available_quantity = available_quantity + ? WHERE id = ?';
       await pool.execute(updateReturnQuery, [returnedDiff, currentItem.item_id]);
     }
+
+    // Log the project item update activity
+    const changes = [];
+    if (allocated_quantity !== undefined && allocated_quantity !== currentItem.allocated_quantity) {
+      changes.push(`allocated quantity changed from ${currentItem.allocated_quantity} to ${allocated_quantity}`);
+    }
+    if (damaged_quantity !== undefined && damaged_quantity !== currentItem.damaged_quantity) {
+      changes.push(`damaged quantity changed from ${currentItem.damaged_quantity} to ${damaged_quantity}`);
+    }
+    if (lost_quantity !== undefined && lost_quantity !== currentItem.lost_quantity) {
+      changes.push(`lost quantity changed from ${currentItem.lost_quantity} to ${lost_quantity}`);
+    }
+    if (returned_quantity !== undefined && returned_quantity !== currentItem.returned_quantity) {
+      changes.push(`returned quantity changed from ${currentItem.returned_quantity} to ${returned_quantity}`);
+    }
+    if (status !== undefined && status !== currentItem.status) {
+      changes.push(`status changed from ${currentItem.status} to ${status}`);
+    }
+    
+    if (changes.length > 0) {
+      const logQuery = `
+        INSERT INTO project_log (project_id, project_day_id, log_type, description, recorded_by, created_at)
+        VALUES (?, ?, 'activity', ?, ?, NOW())
+      `;
+      const logDescription = `Project item "${currentItem.item_name}" updated: ${changes.join(', ')}`;
+      await pool.execute(logQuery, [currentItem.project_id, currentItem.project_day_id, logDescription, req.user?.id || null]);
+    }
     
     res.json({
       success: true,
@@ -931,12 +1114,31 @@ router.put('/project-items/:id', async (req, res) => {
  * DELETE /api/project-detail/project-items/:id
  * Remove item from project
  */
-router.delete('/project-items/:id', async (req, res) => {
+router.delete('/project-items/:id', auth, async (req, res) => {
+  // Check permissions - user must be able to manage projects or delete projects
+  const userPermissions = req.user?.permissions;
+  
+  // Allow if user is Administrator or has proper permissions
+  const isAdmin = req.user?.positionName === 'Administrator';
+  const hasPermissions = userPermissions && (userPermissions.canManageProjects || userPermissions.canDeleteProject);
+  
+  if (!isAdmin && !hasPermissions) {
+    return res.status(403).json({
+      success: false,
+      message: 'Insufficient permissions to delete project items'
+    });
+  }
   const { id } = req.params;
   
   try {
-    // Get item details before deletion for inventory adjustment
-    const getItemQuery = 'SELECT item_id, allocated_quantity FROM project_item WHERE id = ?';
+    // Get item details before deletion for inventory adjustment and logging
+    const getItemQuery = `
+      SELECT pi.item_id, pi.allocated_quantity, pd.project_id, i.name as item_name
+      FROM project_item pi
+      JOIN project_day pd ON pi.project_day_id = pd.id
+      JOIN item i ON pi.item_id = i.id
+      WHERE pi.id = ?
+    `;
     const [itemResult] = await pool.execute(getItemQuery, [id]);
     
     if (itemResult.length === 0) {
@@ -946,7 +1148,7 @@ router.delete('/project-items/:id', async (req, res) => {
       });
     }
 
-    const { item_id, allocated_quantity } = itemResult[0];
+    const { item_id, allocated_quantity, project_id, item_name } = itemResult[0];
     
     // Delete project item
     const deleteQuery = 'DELETE FROM project_item WHERE id = ?';
@@ -955,6 +1157,14 @@ router.delete('/project-items/:id', async (req, res) => {
     // Return allocated quantity back to inventory
     const updateItemQuery = 'UPDATE item SET available_quantity = available_quantity + ? WHERE id = ?';
     await pool.execute(updateItemQuery, [allocated_quantity, item_id]);
+
+    // Log the project item deletion activity
+    const logQuery = `
+      INSERT INTO project_log (project_id, project_day_id, log_type, description, recorded_by, created_at)
+      VALUES (?, NULL, 'activity', ?, ?, NOW())
+    `;
+    const logDescription = `Project item "${item_name}" removed (${allocated_quantity} units returned to inventory)`;
+    await pool.execute(logQuery, [project_id, logDescription, req.user?.id || null]);
     
     res.json({
       success: true,
@@ -1085,7 +1295,7 @@ router.post('/create-item-and-assign', async (req, res) => {
                 project_day_id, item_id, allocated_quantity, 
                 damaged_quantity, lost_quantity, returned_quantity,
                 status, created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, 'allocated', NOW(), NOW())
+              ) VALUES (?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())
             `;
             
             const [insertResult] = await pool.execute(insertQuery, [
@@ -1271,7 +1481,7 @@ router.post('/add-items', async (req, res) => {
             `;
             
             const [insertResult] = await pool.execute(insertQuery, [
-              dayId, item_id, allocated_quantity || 0, status || 'allocated'
+              dayId, item_id, allocated_quantity || 0, status || 'pending'
             ]);
             
             results.push({

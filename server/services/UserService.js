@@ -77,6 +77,60 @@ class UserService {
     }
   }
 
+  static async findByUsernameWithPermissions(username) {
+    try {
+      const sql = `
+        SELECT u.*, p.name as position_name, p.can_manage_projects, p.can_edit_project, 
+               p.can_add_project, p.can_delete_project, p.can_manage_inventory, 
+               p.can_add_inventory, p.can_edit_inventory, p.can_delete_inventory,
+               p.can_manage_users, p.can_edit_user, p.can_add_user, p.can_delete_user
+        FROM user u 
+        LEFT JOIN position p ON u.position_id = p.id 
+        WHERE u.username = ? AND u.is_active = TRUE
+        LIMIT 1
+      `;
+      const user = await queryOne(sql, [username]);
+      
+      if (!user) {
+        return null;
+      }
+
+      // Transform to match the auth middleware format
+      return {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        name: `${user.first_name} ${user.last_name}`,
+        positionId: user.position_id,
+        positionName: user.position_name,
+        role: user.position_name || 'No Position',
+        is_active: user.is_active,
+        created_at: user.created_at,
+        updated_at: user.updated_at,
+        password_hash: user.password_hash,
+        permissions: {
+          canManageProjects: user.can_manage_projects,
+          canEditProject: user.can_edit_project,
+          canAddProject: user.can_add_project,
+          canDeleteProject: user.can_delete_project,
+          canManageInventory: user.can_manage_inventory,
+          canAddInventory: user.can_add_inventory,
+          canEditInventory: user.can_edit_inventory,
+          canDeleteInventory: user.can_delete_inventory,
+          canManageUsers: user.can_manage_users,
+          canEditUser: user.can_edit_user,
+          canAddUser: user.can_add_user,
+          canDeleteUser: user.can_delete_user
+        }
+      };
+    } catch (error) {
+      console.error('Error finding user by username with permissions:', error);
+      throw error;
+    }
+  }
+
   static async create(userData) {
     try {
       const { firstName, lastName, email, password, role = 'staff', username, is_active = true, position_id } = userData;

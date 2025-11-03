@@ -800,4 +800,307 @@ router.get('/locations', auth, async (req, res) => {
   }
 });
 
+// @route   PUT /api/inventory/:id/quantity
+// @desc    Update item delivered quantity
+// @access  Private
+router.put('/:id/quantity', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { delivered_quantity } = req.body;
+
+    if (!delivered_quantity || delivered_quantity < 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Valid delivered quantity is required'
+      });
+    }
+
+    // Check if item exists
+    const [existingRows] = await pool.execute('SELECT * FROM item WHERE id = ?', [id]);
+
+    if (existingRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Inventory item not found'
+      });
+    }
+
+    const oldQuantity = existingRows[0].delivered_quantity;
+    const quantityDifference = delivered_quantity - oldQuantity;
+
+    // Update delivered quantity and adjust available quantity
+    const newAvailableQuantity = existingRows[0].available_quantity + quantityDifference;
+
+    await pool.execute(`
+      UPDATE item 
+      SET delivered_quantity = ?, available_quantity = ?, updated_at = NOW()
+      WHERE id = ?
+    `, [delivered_quantity, Math.max(0, newAvailableQuantity), id]);
+
+    // Log the activity
+    await pool.execute(`
+      INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
+      VALUES (?, 'quantity_updated', 'item', ?, ?, NOW())
+    `, [
+      req.user.id, 
+      id, 
+      `Delivered quantity updated from ${oldQuantity} to ${delivered_quantity}. Available quantity adjusted to ${Math.max(0, newAvailableQuantity)}.`
+    ]);
+
+    // Create inventory log
+    if (quantityDifference !== 0) {
+      await pool.execute(`
+        INSERT INTO inventory_log (item_id, log_type, quantity, handled_by, remarks, created_at)
+        VALUES (?, ?, ?, ?, ?, NOW())
+      `, [
+        id,
+        quantityDifference > 0 ? 'in' : 'out',
+        Math.abs(quantityDifference),
+        req.user.id,
+        `Quantity adjustment: ${quantityDifference > 0 ? 'increased' : 'decreased'} by ${Math.abs(quantityDifference)}`
+      ]);
+    }
+
+    res.json({
+      success: true,
+      message: 'Quantity updated successfully',
+      data: { delivered_quantity, available_quantity: Math.max(0, newAvailableQuantity) }
+    });
+
+  } catch (error) {
+    console.error('Update quantity error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error updating quantity'
+    });
+  }
+});
+
+// @route   PUT /api/inventory/:id/location
+// @desc    Move item to different location
+// @access  Private
+router.put('/:id/location', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { warehouse_location_id } = req.body;
+
+    // Check if item exists
+    const [existingRows] = await pool.execute(`
+      SELECT i.*, l.name as current_location_name 
+      FROM item i 
+      LEFT JOIN location l ON i.warehouse_location_id = l.id 
+      WHERE i.id = ?
+    `, [id]);
+
+    if (existingRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Inventory item not found'
+      });
+    }
+
+    // Get new location name
+    const [newLocationRows] = await pool.execute('SELECT name FROM location WHERE id = ?', [warehouse_location_id]);
+    const newLocationName = newLocationRows.length > 0 ? newLocationRows[0].name : 'Unknown Location';
+
+    const oldLocationId = existingRows[0].warehouse_location_id;
+    const oldLocationName = existingRows[0].current_location_name || 'No Location';
+
+    // Update location
+    await pool.execute(`
+      UPDATE item 
+      SET warehouse_location_id = ?, updated_at = NOW()
+      WHERE id = ?
+    `, [warehouse_location_id, id]);
+
+    // Log the activity
+    await pool.execute(`
+      INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
+      VALUES (?, 'location_moved', 'item', ?, ?, NOW())
+    `, [
+      req.user.id, 
+      id, 
+      `Item moved from "${oldLocationName}" to "${newLocationName}"`
+    ]);
+
+    // Create inventory transfer log
+    await pool.execute(`
+      INSERT INTO inventory_log (item_id, log_type, quantity, from_location_id, to_location_id, handled_by, remarks, created_at)
+      VALUES (?, 'transfer', ?, ?, ?, ?, ?, NOW())
+    `, [
+      id,
+      existingRows[0].available_quantity,
+      oldLocationId,
+      warehouse_location_id,
+      req.user.id,
+      `Location transfer from "${oldLocationName}" to "${newLocationName}"`
+    ]);
+
+    res.json({
+      success: true,
+      message: 'Location updated successfully',
+      data: { warehouse_location_id, location_name: newLocationName }
+    });
+
+  } catch (error) {
+    console.error('Update location error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error updating location'
+    });
+  }
+});
+
+// @route   POST /api/inventory/:id/issue
+// @desc    Report damage or loss issue
+// @access  Private
+router.post('/:id/issue', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { issue_type, quantity, description } = req.body;
+
+    if (!['damage', 'loss'].includes(issue_type)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Issue type must be either "damage" or "loss"'
+      });
+    }
+
+    if (!quantity || quantity <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Valid quantity is required'
+      });
+    }
+
+    // Check if item exists and has enough available quantity
+    const [existingRows] = await pool.execute('SELECT * FROM item WHERE id = ?', [id]);
+
+    if (existingRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Inventory item not found'
+      });
+    }
+
+    if (existingRows[0].available_quantity < quantity) {
+      return res.status(400).json({
+        success: false,
+        error: 'Not enough available quantity to report this issue'
+      });
+    }
+
+    // Update quantities
+    const newAvailableQuantity = existingRows[0].available_quantity - quantity;
+    const updateField = issue_type === 'damage' ? 'damaged_quantity' : 'lost_quantity';
+    const currentIssueQuantity = existingRows[0][updateField];
+    const newIssueQuantity = currentIssueQuantity + quantity;
+
+    await pool.execute(`
+      UPDATE item 
+      SET available_quantity = ?, ${updateField} = ?, updated_at = NOW()
+      WHERE id = ?
+    `, [newAvailableQuantity, newIssueQuantity, id]);
+
+    // Log the activity
+    await pool.execute(`
+      INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
+      VALUES (?, 'issue_reported', 'item', ?, ?, NOW())
+    `, [
+      req.user.id, 
+      id, 
+      `${issue_type === 'damage' ? 'Damage' : 'Loss'} reported: ${quantity} items. ${description || ''}`
+    ]);
+
+    // Create damage/loss log
+    await pool.execute(`
+      INSERT INTO damage_loss_log (entity_type, entity_id, quantity, issue_type, reported_by, remarks, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, NOW())
+    `, [
+      existingRows[0].type,
+      id,
+      quantity,
+      issue_type,
+      req.user.id,
+      description || `${issue_type === 'damage' ? 'Damage' : 'Loss'} reported via inventory management`
+    ]);
+
+    // Create inventory log
+    await pool.execute(`
+      INSERT INTO inventory_log (item_id, log_type, quantity, handled_by, remarks, created_at)
+      VALUES (?, 'out', ?, ?, ?, NOW())
+    `, [
+      id,
+      quantity,
+      req.user.id,
+      `${issue_type === 'damage' ? 'Damaged' : 'Lost'} items: ${description || 'No description provided'}`
+    ]);
+
+    res.json({
+      success: true,
+      message: `${issue_type === 'damage' ? 'Damage' : 'Loss'} reported successfully`,
+      data: { 
+        available_quantity: newAvailableQuantity,
+        [updateField]: newIssueQuantity 
+      }
+    });
+
+  } catch (error) {
+    console.error('Report issue error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error reporting issue'
+    });
+  }
+});
+
+// @route   GET /api/inventory/:id/activity
+// @desc    Get activity logs for specific item
+// @access  Private
+router.get('/:id/activity', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if item exists
+    const [existingRows] = await pool.execute('SELECT id FROM item WHERE id = ?', [id]);
+
+    if (existingRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Inventory item not found'
+      });
+    }
+
+    // Get activity logs
+    const [activityRows] = await pool.execute(`
+      SELECT 
+        al.id,
+        al.action,
+        al.description,
+        al.created_at,
+        CONCAT(u.first_name, ' ', u.last_name) as user_name
+      FROM activity_log al
+      LEFT JOIN user u ON al.user_id = u.id
+      WHERE al.entity = 'item' AND al.entity_id = ?
+      ORDER BY al.created_at DESC
+      LIMIT 50
+    `, [id]);
+
+    res.json({
+      success: true,
+      message: 'Activity logs retrieved successfully',
+      data: {
+        activities: activityRows
+      }
+    });
+
+  } catch (error) {
+    console.error('Get activity logs error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error retrieving activity logs'
+    });
+  }
+});
+
 module.exports = router;

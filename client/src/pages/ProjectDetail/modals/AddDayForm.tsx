@@ -35,8 +35,7 @@ const AddDayForm: FC<AddDayFormProps> = ({
     resolver: zodResolver(AddProjectDaySchema),
     defaultValues: {
       project_date: '',
-      location_id: null,
-      status: 'scheduled'
+      location_id: null
     }
   })
 
@@ -102,8 +101,7 @@ const AddDayForm: FC<AddDayFormProps> = ({
           data as AddProjectDayData,
           ...validAdditionalDays.map(date => ({
             ...data,
-            project_date: date,
-            status: (data as AddProjectDayData).status
+            project_date: date
           } as AddProjectDayData))
         ]
       }
@@ -195,24 +193,7 @@ const AddDayForm: FC<AddDayFormProps> = ({
               )}
             </div>
 
-            {/* Status */}
-            <div>
-              <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-2">
-                Status
-              </label>
-              <select
-                id="status"
-                {...register('status')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="scheduled">Scheduled</option>
-                <option value="ongoing">Ongoing</option>
-                <option value="completed">Completed</option>
-              </select>
-              {errors.status && (
-                <p className="text-red-500 text-sm mt-1">{errors.status.message}</p>
-              )}
-            </div>
+
 
             {/* Apply to Multiple Days Toggle */}
             <div className="border-t pt-4">

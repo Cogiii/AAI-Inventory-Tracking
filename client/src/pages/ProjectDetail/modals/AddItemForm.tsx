@@ -86,8 +86,6 @@ const AddItemForm: FC<AddItemFormProps> = ({
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
-    
-    // Validate all rows
     const validRows = itemRows.filter(row => 
       row.item_id && 
       row.allocated_quantity > 0 && 
@@ -99,11 +97,10 @@ const AddItemForm: FC<AddItemFormProps> = ({
       return
     }
 
-    // Convert to items data
     const itemsData = validRows.map(row => ({
       item_id: row.item_id!,
       allocated_quantity: row.allocated_quantity,
-      status: 'allocated' // Default status
+      status: 'allocated'
     }))
 
     setPendingData(itemsData)
@@ -114,7 +111,6 @@ const AddItemForm: FC<AddItemFormProps> = ({
     if (pendingData.length === 0) return
 
     try {
-      // Determine target project day IDs
       const targetProjectDayIds = applyToAllDays 
         ? projectDays.map(day => day.id)
         : selectedDay === 'all' 

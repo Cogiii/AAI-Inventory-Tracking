@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { TokenValidator } from '../../utils/tokenValidator';
 import AuthService from '../../services/auth/AuthService';
-import { removeSecureToken } from '@/utils/tokenSecurity';
+import { removeSecureToken, hasValidToken } from '@/utils/tokenSecurity';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -29,6 +29,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       try {
         // Quick local check first - no API call
         if (!TokenValidator.hasLocalToken()) {
+          setIsTokenValid(false);
+          return;
+        }
+
+        // Additional check for token validity from local storage
+        if (!hasValidToken()) {
           setIsTokenValid(false);
           return;
         }
@@ -68,13 +74,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // Redirect to login if not authenticated or token invalid
   if (isTokenValid === false) {
     removeSecureToken();
-    // navigate('/login');
+    navigate('/login', { replace: true });
     return null;
   }
 
   // Check role permissions if required roles are specified
   const user = AuthService.getCurrentUser();
-  if (requiredRoles.length > 0 && user && !requiredRoles.includes(user.role)) {
+  if (requiredRoles.length > 0 && user && user.role && !requiredRoles.includes(user.role)) {
     navigate('/unauthorized');
     return null;
   }

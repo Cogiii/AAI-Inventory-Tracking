@@ -72,7 +72,7 @@ const UserProfile: FC<UserProfileProps> = ({ user, onLogout, isExpanded = true }
               {getFullName(user)}
             </p>
             <p className="text-xs capitalize" style={{ color: '#4C4C4C' }}>
-              {user?.role || 'Staff Member'}
+              {user?.positionName || 'Staff Member'}
             </p>
           </div>
         </div>

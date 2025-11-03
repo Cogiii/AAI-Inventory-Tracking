@@ -5,14 +5,17 @@ import { Package, Box, AlertTriangle, CheckCircle, XCircle, Plus, Edit, Trash2, 
 import AddItemForm from '../modals/AddItemForm'
 import EditItemForm from '../modals/EditItemForm'
 import { ConfirmationModal } from '@/components/ui'
-import { useProjectDetail } from '@/hooks/useProjectDetail'
+import { useProjectDetail, useDeleteProjectItem } from '@/hooks/useProjectDetail'
 
 interface ProjectItemsProps {
   joNumber?: string
 }
 
 const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
+  // All hooks must be called before any conditional returns
   const { data: projectData, isLoading: projectLoading, error: projectError } = useProjectDetail(joNumber)
+  const deleteProjectItemMutation = useDeleteProjectItem()
+  
   const [selectedDay, setSelectedDay] = useState<number | 'all'>('all')
   const [showAddForm, setShowAddForm] = useState(false)
   const [applyToAllDays, setApplyToAllDays] = useState(false)
@@ -23,6 +26,36 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
     dayId: number
   }>({ isOpen: false, item: null, dayId: 0 })
 
+  // Handler functions
+  const handleDeleteItem = async (projectItemId: number) => {
+    if (!joNumber) return
+    
+    try {
+      await deleteProjectItemMutation.mutateAsync({
+        joNumber,
+        id: projectItemId
+      })
+    } catch (error) {
+      console.error('Error deleting project item:', error)
+    }
+  }
+
+  const handleDeleteClick = (item: any, dayId: number) => {
+    setDeleteConfirmation({
+      isOpen: true,
+      item,
+      dayId
+    })
+  }
+
+  const handleConfirmDelete = () => {
+    if (deleteConfirmation.item) {
+      handleDeleteItem(deleteConfirmation.item.id)
+      setDeleteConfirmation({ isOpen: false, item: null, dayId: 0 })
+    }
+  }
+
+  // Early returns after all hooks
   if (!joNumber) return null
 
   if (projectLoading) {
@@ -51,15 +84,13 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'allocated':
+      case 'pending':
         return 'bg-blue-100 text-blue-800 border-blue-200'
-      case 'in_use':
+      case 'accepted':
         return 'bg-green-100 text-green-800 border-green-200'
-      case 'partial_return':
-        return 'bg-orange-100 text-orange-800 border-orange-200'
       case 'returned':
         return 'bg-gray-100 text-gray-800 border-gray-200'
-      case 'damaged':
+      case 'rejected':
         return 'bg-red-100 text-red-800 border-red-200'
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200'
@@ -68,11 +99,10 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'allocated': return Package
-      case 'in_use': return CheckCircle
-      case 'partial_return': return Box
-      case 'returned': return CheckCircle
-      case 'damaged': return XCircle
+      case 'pending': return Package
+      case 'accepted': return CheckCircle
+      case 'returned': return Box
+      case 'rejected': return XCircle
       default: return Package
     }
   }
@@ -105,27 +135,6 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
     // Find the specific day and return its items
     const targetDay = projectDays.find(day => day.id === selectedDay)
     return targetDay ? targetDay.items : []
-  }
-
-
-
-  const handleDeleteItem = (itemId: number, dayId: number) => {
-    console.log('Delete item:', itemId, 'from day:', dayId)
-  }
-
-  const handleDeleteClick = (item: any, dayId: number) => {
-    setDeleteConfirmation({
-      isOpen: true,
-      item,
-      dayId
-    })
-  }
-
-  const handleConfirmDelete = () => {
-    if (deleteConfirmation.item && deleteConfirmation.dayId) {
-      handleDeleteItem(deleteConfirmation.item.item_id, deleteConfirmation.dayId)
-      setDeleteConfirmation({ isOpen: false, item: null, dayId: 0 })
-    }
   }
 
   const displayItems = getDisplayItems()
@@ -253,17 +262,23 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
                         <div className="flex gap-2">
                           <button
                             onClick={() => setEditingItem(item)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 hover:shadow-lg rounded-lg transition-all duration-200 hover:scale-110"
+                            disabled={deleteProjectItemMutation.isPending}
+                            className="p-2 text-blue-600 hover:bg-blue-50 hover:shadow-lg rounded-lg transition-all duration-200 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Edit item"
                           >
                             <Edit className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => handleDeleteClick(item, item.project_day_id)}
-                            className="p-2 text-red-600 hover:bg-red-50 hover:shadow-lg rounded-lg transition-all duration-200 hover:scale-110"
+                            disabled={deleteProjectItemMutation.isPending}
+                            className="p-2 text-red-600 hover:bg-red-50 hover:shadow-lg rounded-lg transition-all duration-200 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Delete item"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            {deleteProjectItemMutation.isPending && deleteConfirmation.item?.id === item.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
                           </button>
                         </div>
                       </div>
@@ -289,10 +304,11 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
           }}
         />
 
-        {/* Edit Item Form Modal */}
+        {/* Edit Project Item Form Modal */}
         <EditItemForm
           isOpen={!!editingItem}
           item={editingItem}
+          joNumber={joNumber!}
           onSave={() => setEditingItem(null)}
           onCancel={() => setEditingItem(null)}
         />
@@ -302,9 +318,10 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
           isOpen={deleteConfirmation.isOpen}
           type="delete"
           title="Delete Item"
-          message={`Are you sure you want to delete "${deleteConfirmation.item?.item_name}"? This action cannot be undone.`}
+          message={`Are you sure you want to delete "${deleteConfirmation.item?.item_name}"? This will return ${deleteConfirmation.item?.allocated_quantity || 0} units back to inventory.`}
           onConfirm={handleConfirmDelete}
           onClose={() => setDeleteConfirmation({ isOpen: false, item: null, dayId: 0 })}
+          confirmText={deleteProjectItemMutation.isPending ? "Deleting..." : "Delete Item"}
         />
       </CardContent>
     </Card>

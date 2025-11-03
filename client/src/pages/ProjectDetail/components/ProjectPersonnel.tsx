@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmationModal } from '@/components/ui'
 import { Users, User, Phone, Calendar, Briefcase, Plus, Trash2, Loader2, AlertTriangle } from 'lucide-react'
 import AddPersonnelForm from '../modals/AddPersonnelForm'
-import { useProjectDetail, usePersonnelRoles, useRemovePersonnel } from '@/hooks/useProjectDetail'
+import { useProjectDetail, useRemovePersonnel } from '@/hooks/useProjectDetail'
 
 
 interface ProjectPersonnelProps {

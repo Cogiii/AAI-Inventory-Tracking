@@ -2,7 +2,9 @@ import { createBrowserRouter } from 'react-router-dom';
 
 import Layout from './components/layout/Layout';
 import { ProtectedRoute, PublicRoute } from './components/auth';
+import PermissionGuard from './components/auth/PermissionGuard';
 import { RouterErrorBoundary } from './components/ErrorBoundary';
+import { protectedRouteLoader, publicRouteLoader } from './utils/routeLoaders';
 
 import {
   Login,
@@ -25,6 +27,7 @@ export const router = createBrowserRouter([
         <Login />
       </PublicRoute>
     ),
+    loader: publicRouteLoader,
     errorElement: <RouterErrorBoundary />,
   },
   {
@@ -34,6 +37,7 @@ export const router = createBrowserRouter([
         <Login />
       </PublicRoute>
     ),
+    loader: publicRouteLoader,
     errorElement: <RouterErrorBoundary />,
   },
   {
@@ -45,6 +49,7 @@ export const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    loader: protectedRouteLoader,
     errorElement: <RouterErrorBoundary />,
   },
   {
@@ -61,6 +66,7 @@ export const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    loader: protectedRouteLoader,
     errorElement: <RouterErrorBoundary />,
   },
   {
@@ -72,6 +78,7 @@ export const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    loader: protectedRouteLoader,
     errorElement: <RouterErrorBoundary />,
   },
   {
@@ -83,6 +90,7 @@ export const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    loader: protectedRouteLoader,
     errorElement: <RouterErrorBoundary />,
   },
   {
@@ -94,6 +102,7 @@ export const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    loader: protectedRouteLoader,
     errorElement: <RouterErrorBoundary />,
   },
   {
@@ -105,17 +114,21 @@ export const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
+    loader: protectedRouteLoader,
     errorElement: <RouterErrorBoundary />,
   },
   {
     path: '/users',
     element: (
-      <ProtectedRoute requiredRoles={['Administrator', 'Marketing Manager']}>
-        <Layout showSidebar={true}>
-          <UsersPage />
-        </Layout>
+      <ProtectedRoute>
+        <PermissionGuard requiredPermission="canManageUsers" showAccessDenied={true}>
+          <Layout showSidebar={true}>
+            <UsersPage />
+          </Layout>
+        </PermissionGuard>
       </ProtectedRoute>
     ),
+    loader: protectedRouteLoader,
     errorElement: <RouterErrorBoundary />,
   },
   // Catch all route

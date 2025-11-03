@@ -30,10 +30,7 @@ const ItemSelector: React.FC<ItemSelectorProps> = ({
   // Get available items for project
   const { data: itemsResponse, isLoading } = useAvailableItemsForProject(joNumber)
   const items = itemsResponse?.data || []
-  
-  // Debug logging
-  console.log('ItemSelector - joNumber:', joNumber, 'items count:', items.length, 'isLoading:', isLoading)
-  
+    
   const selectedItem = value ? items.find((item: any) => item.id === value) : null
 
   // Filter items based on search query

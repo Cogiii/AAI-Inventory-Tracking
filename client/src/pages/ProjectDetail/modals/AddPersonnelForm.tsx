@@ -2,10 +2,10 @@ import { useState } from 'react'
 import type { FC , FormEvent } from 'react'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+
 import { ConfirmationModal, PersonnelSelector, RoleSelector } from '@/components/ui'
 import { ToggleLeft, ToggleRight, Plus, Minus, Users, User, Loader2 } from 'lucide-react'
-import { usePersonnelRoles, useAddPersonnel, useProjectDetail } from '@/hooks/useProjectDetail'
+import { usePersonnelRoles, useAddPersonnel } from '@/hooks/useProjectDetail'
 
 interface AddPersonnelFormProps {
   isOpen: boolean
@@ -35,7 +35,7 @@ const AddPersonnelForm: FC<AddPersonnelFormProps> = ({
   onCancel
 }) => {
   // Hooks
-  const { data: personnelRolesData, isLoading: personnelRolesLoading } = usePersonnelRoles()
+  const { isLoading: personnelRolesLoading } = usePersonnelRoles()
   const addPersonnelMutation = useAddPersonnel()
   const [personnelRows, setPersonnelRows] = useState<PersonnelRow[]>([
     {

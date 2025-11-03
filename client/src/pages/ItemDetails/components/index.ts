@@ -1,0 +1,9 @@
+// Export all ItemDetails components for easy importing
+export { default as ItemHeader } from './ItemHeader'
+export { default as ItemInfoCards } from './ItemInfoCards'
+export { default as ActionButtons } from './ActionButtons'
+export { default as EditItemModal } from './EditItemModal'
+export { default as UpdateQuantityModal } from './UpdateQuantityModal'
+export { default as MoveLocationModal } from './MoveLocationModal'
+export { default as ReportIssueModal } from './ReportIssueModal'
+export { default as ActivityHistoryCard } from './ActivityHistoryCard'

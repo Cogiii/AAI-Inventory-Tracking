@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Eye, FileText, Calendar, Users } from 'lucide-react'
+import { Eye, FileText } from 'lucide-react'
 import { useRecentProjects } from '@/hooks/useDashboard'
 import { Link } from 'react-router-dom'
 

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Package, Wrench, HardHat, ChevronLeft, ChevronRight, Edit, Trash2, Eye, MapPin, AlertTriangle, Calendar } from 'lucide-react'
+
+import { Package, Wrench, HardHat, ChevronRight, MapPin, AlertTriangle, Calendar } from 'lucide-react'
 import { useInventoryItems } from '@/hooks/useInventory'
 import Loader from '@/components/ui/Loader'
 import type { FilterState } from '@/types'

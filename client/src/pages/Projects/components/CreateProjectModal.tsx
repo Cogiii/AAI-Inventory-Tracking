@@ -2,8 +2,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal';
-import { Plus } from 'lucide-react';
-import { createProjectSchema, type CreateProjectFormData } from '@/schemas';
+
+import { createProjectSchema } from '@/schemas';
 import { useCreateProject } from '@/hooks/useProjects';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 

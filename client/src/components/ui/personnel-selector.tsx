@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { User, Plus, Search, Check, X, Phone, Loader2 } from 'lucide-react'
+import { User, Plus, Search, Check, X, Phone } from 'lucide-react'
 import { usePersonnelRoles } from '@/hooks/useProjectDetail'
 
 interface PersonnelSelectorProps {
@@ -32,7 +32,7 @@ const PersonnelSelector: React.FC<PersonnelSelectorProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null)
   
   // Use API to get personnel data
-  const { data: personnelRolesData, isLoading: personnelRolesLoading } = usePersonnelRoles()
+  const { data: personnelRolesData } = usePersonnelRoles()
   const personnel = personnelRolesData?.personnel || []
   const selectedPersonnel = value ? personnel.find((p: any) => p.id === value) : null
 

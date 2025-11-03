@@ -27,6 +27,23 @@ CREATE TABLE brand (
 CREATE TABLE `position` (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
+
+    -- Permissions
+    can_manage_projects BOOLEAN DEFAULT FALSE, -- Access to everything
+    can_edit_project BOOLEAN DEFAULT FALSE,
+    can_add_project BOOLEAN DEFAULT FALSE,
+    can_delete_project BOOLEAN DEFAULT FALSE,
+    
+    can_manage_inventory BOOLEAN DEFAULT FALSE,-- Access to everything
+    can_add_inventory BOOLEAN DEFAULT FALSE,
+    can_edit_inventory BOOLEAN DEFAULT FALSE,
+    can_delete_inventory BOOLEAN DEFAULT FALSE,
+    
+    can_manage_users BOOLEAN DEFAULT FALSE, -- Access to everything
+    can_edit_user BOOLEAN DEFAULT FALSE,
+    can_add_user BOOLEAN DEFAULT FALSE,
+    can_delete_user BOOLEAN DEFAULT FALSE,
+
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NULL ON UPDATE NOW()
 );
@@ -91,7 +108,8 @@ CREATE TABLE item (
     lost_quantity INT DEFAULT 0,
     available_quantity INT DEFAULT 0,
     warehouse_location_id INT REFERENCES location(id) ON DELETE SET NULL,
-    status VARCHAR(50),
+    expired_date DATE,
+    status ENUM('in stock', 'out of stock', 'inactive') DEFAULT 'in stock',
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NULL ON UPDATE NOW()
 );
@@ -105,7 +123,7 @@ CREATE TABLE project (
     jo_number VARCHAR(100) UNIQUE NOT NULL,
     name VARCHAR(255) NOT NULL,
     description TEXT,
-    status VARCHAR(50) CHECK (status IN ('upcoming', 'ongoing', 'completed', 'cancelled')),
+    status VARCHAR(50) CHECK (status IN ('upcoming', 'ongoing', 'completed', 'cancelled')) DEFAULT 'upcoming',
     created_by INT REFERENCES user(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NULL ON UPDATE NOW()
@@ -128,7 +146,7 @@ CREATE TABLE project_item (
     damaged_quantity INT DEFAULT 0,
     lost_quantity INT DEFAULT 0,
     returned_quantity INT DEFAULT 0,
-    status VARCHAR(50), -- Accepted, Rejected, Pending
+    status ENUM('allocated', 'returned') DEFAULT 'pending', -- Accepted, Rejected, Pending
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NULL ON UPDATE NOW()
 );
