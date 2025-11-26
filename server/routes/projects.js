@@ -16,7 +16,12 @@ router.get('/', auth, async (req, res) => {
       status, 
       search,
       sortBy = 'created_at',
-      sortOrder = 'DESC'
+      sortOrder = 'DESC',
+      dateFrom,
+      dateTo,
+      location,
+      createdBy,
+      hasItems
     } = req.query;
 
     const offset = (page - 1) * limit;
@@ -34,6 +39,38 @@ router.get('/', auth, async (req, res) => {
       whereClause += ' AND (p.name LIKE ? OR p.jo_number LIKE ? OR p.description LIKE ?)';
       const searchTerm = `%${search}%`;
       queryParams.push(searchTerm, searchTerm, searchTerm);
+    }
+
+    // Add date range filter (created date)
+    if (dateFrom) {
+      whereClause += ' AND DATE(p.created_at) >= ?';
+      queryParams.push(dateFrom);
+    }
+
+    if (dateTo) {
+      whereClause += ' AND DATE(p.created_at) <= ?';
+      queryParams.push(dateTo);
+    }
+
+    // Add location filter
+    if (location) {
+      whereClause += ' AND EXISTS (SELECT 1 FROM project_day pd2 WHERE pd2.project_id = p.id AND pd2.location_id = ?)';
+      queryParams.push(location);
+    }
+
+    // Add created by filter
+    if (createdBy) {
+      whereClause += ' AND p.created_by = ?';
+      queryParams.push(createdBy);
+    }
+
+    // Add has items filter
+    if (hasItems !== undefined) {
+      if (hasItems === 'true' || hasItems === true) {
+        whereClause += ' AND EXISTS (SELECT 1 FROM project_day pd3 INNER JOIN project_item pi3 ON pd3.id = pi3.project_day_id WHERE pd3.project_id = p.id)';
+      } else {
+        whereClause += ' AND NOT EXISTS (SELECT 1 FROM project_day pd3 INNER JOIN project_item pi3 ON pd3.id = pi3.project_day_id WHERE pd3.project_id = p.id)';
+      }
     }
 
     // Get total count for pagination

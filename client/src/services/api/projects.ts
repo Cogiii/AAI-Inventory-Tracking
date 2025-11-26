@@ -63,6 +63,11 @@ export interface ProjectFilters {
   search?: string;
   sortBy?: string;
   sortOrder?: 'ASC' | 'DESC';
+  dateFrom?: string;
+  dateTo?: string;
+  location?: string;
+  createdBy?: string;
+  hasItems?: boolean;
 }
 
 export interface ProjectsResponse {
@@ -101,6 +106,11 @@ export const projectsApi = {
     if (filters.search) params.append('search', filters.search);
     if (filters.sortBy) params.append('sortBy', filters.sortBy);
     if (filters.sortOrder) params.append('sortOrder', filters.sortOrder);
+    if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
+    if (filters.dateTo) params.append('dateTo', filters.dateTo);
+    if (filters.location) params.append('location', filters.location);
+    if (filters.createdBy) params.append('createdBy', filters.createdBy);
+    if (filters.hasItems !== undefined) params.append('hasItems', filters.hasItems.toString());
 
     const response = await api.get(`/projects?${params.toString()}`);
     return response.data.data;

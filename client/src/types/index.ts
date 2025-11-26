@@ -286,6 +286,11 @@ export interface ProjectFilters {
   search?: string;
   sortBy?: string;
   sortOrder?: 'ASC' | 'DESC';
+  dateFrom?: string;
+  dateTo?: string;
+  location?: string;
+  createdBy?: string;
+  hasItems?: boolean;
 }
 
 export interface ProjectsResponse {

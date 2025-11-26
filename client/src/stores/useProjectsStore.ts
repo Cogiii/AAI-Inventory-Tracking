@@ -29,10 +29,15 @@ interface ProjectsStore {
 const initialFilters: ProjectFilters = {
   page: 1,
   limit: 10,
-  status: 'all',
+  status: 'upcoming',
   search: '',
   sortBy: 'created_at',
   sortOrder: 'DESC',
+  dateFrom: undefined,
+  dateTo: undefined,
+  location: undefined,
+  createdBy: undefined,
+  hasItems: undefined,
 };
 
 export const useProjectsStore = create<ProjectsStore>()(
@@ -121,10 +126,15 @@ export const useProjectsStore = create<ProjectsStore>()(
       hasActiveFilters: () => {
         const { filters } = get();
         return (
-          filters.status !== 'all' ||
+          filters.status !== 'upcoming' ||
           (filters.search && filters.search.trim() !== '') ||
           filters.sortBy !== 'created_at' ||
-          filters.sortOrder !== 'DESC'
+          filters.sortOrder !== 'DESC' ||
+          filters.dateFrom !== undefined ||
+          filters.dateTo !== undefined ||
+          filters.location !== undefined ||
+          filters.createdBy !== undefined ||
+          filters.hasItems !== undefined
         );
       },
     }),

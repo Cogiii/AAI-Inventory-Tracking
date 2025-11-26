@@ -62,7 +62,7 @@ const auth = async (req, res, next) => {
     };
     
     // Debug logging (remove in production)
-    console.log('Auth Debug - Final req.user permissions:', req.user.permissions);
+    // console.log('Auth Debug - Final req.user permissions:', req.user.permissions);
     
     next();
   } catch (error) {
