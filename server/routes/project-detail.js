@@ -119,7 +119,29 @@ router.get('/jo/:joNumber', async (req, res) => {
       projectPersonnelRows = personnelResult;
     }
     
-    // 5. Get project logs
+    // 5. Get project logs with pagination
+    const logsPage = parseInt(req.query.logsPage) || 1;
+    const logsLimit = parseInt(req.query.logsLimit) || 10;
+    const logsOffset = (logsPage - 1) * logsLimit;
+
+    // Get total count of logs
+    const logsCountQuery = `
+      SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN log_type = 'status_change' THEN 1 ELSE 0 END) as status_changes,
+        SUM(CASE WHEN log_type = 'activity' THEN 1 ELSE 0 END) as activities,
+        SUM(CASE WHEN log_type = 'incident' THEN 1 ELSE 0 END) as incidents
+      FROM project_log
+      WHERE project_id = ?
+    `;
+    const [logsCountResult] = await pool.execute(logsCountQuery, [project.id]);
+    const totalLogs = logsCountResult[0].total;
+    const logsCounts = {
+      statusChanges: logsCountResult[0].status_changes || 0,
+      activities: logsCountResult[0].activities || 0,
+      incidents: logsCountResult[0].incidents || 0
+    };
+
     const projectLogsQuery = `
       SELECT 
         pl.id,
@@ -134,6 +156,7 @@ router.get('/jo/:joNumber', async (req, res) => {
       LEFT JOIN user u ON pl.recorded_by = u.id
       WHERE pl.project_id = ?
       ORDER BY pl.created_at DESC
+      LIMIT ${logsLimit} OFFSET ${logsOffset}
     `;
     
     const [projectLogsRows] = await pool.execute(projectLogsQuery, [project.id]);
@@ -158,7 +181,14 @@ router.get('/jo/:joNumber', async (req, res) => {
       data: {
         project: project,
         project_days: projectDays,
-        logs: projectLogsRows
+        logs: projectLogsRows,
+        logsPagination: {
+          currentPage: logsPage,
+          totalPages: Math.ceil(totalLogs / logsLimit),
+          totalLogs: totalLogs,
+          limit: logsLimit
+        },
+        logsCounts: logsCounts
       }
     };
     

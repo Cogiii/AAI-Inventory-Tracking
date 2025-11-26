@@ -4,17 +4,18 @@ import { projectDetailAPI, projectDetailMutationAPI } from '@/services/api/proje
 // Query keys
 export const PROJECT_DETAIL_KEYS = {
   all: ['project-detail'] as const,
-  detail: (joNumber: string) => [...PROJECT_DETAIL_KEYS.all, 'detail', joNumber] as const,
+  detail: (joNumber: string, logsPage?: number, logsLimit?: number) => 
+    [...PROJECT_DETAIL_KEYS.all, 'detail', joNumber, { logsPage, logsLimit }] as const,
   availableItems: (joNumber: string) => [...PROJECT_DETAIL_KEYS.all, 'available-items', joNumber] as const,
   personnelRoles: () => [...PROJECT_DETAIL_KEYS.all, 'personnel-roles'] as const,
   locations: () => [...PROJECT_DETAIL_KEYS.all, 'locations'] as const,
 };
 
 // Hook to get complete project details
-export const useProjectDetail = (joNumber: string | undefined) => {
+export const useProjectDetail = (joNumber: string | undefined, logsPage: number = 1, logsLimit: number = 10) => {
   return useQuery({
-    queryKey: PROJECT_DETAIL_KEYS.detail(joNumber || ''),
-    queryFn: () => projectDetailAPI.getProjectDetail(joNumber!),
+    queryKey: PROJECT_DETAIL_KEYS.detail(joNumber || '', logsPage, logsLimit),
+    queryFn: () => projectDetailAPI.getProjectDetail(joNumber!, logsPage, logsLimit),
     enabled: !!joNumber,
     staleTime: 1000 * 60 * 5, // 5 minutes
     gcTime: 1000 * 60 * 10, // 10 minutes

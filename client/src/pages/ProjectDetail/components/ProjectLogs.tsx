@@ -1,16 +1,19 @@
-import type { FC } from 'react'
+import { useState, type FC } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { FileText, Activity, AlertCircle, CheckCircle, Info, Clock, Loader2 } from 'lucide-react'
+import { FileText, Activity, AlertCircle, CheckCircle, Info, Clock, Loader2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { useProjectDetail } from '@/hooks/useProjectDetail'
 
-
+// Configurable limit - can be easily changed
+const LOGS_PER_PAGE = 10
 
 interface ProjectLogsProps {
   joNumber?: string
 }
 
 const ProjectLogs: FC<ProjectLogsProps> = ({ joNumber }) => {
-  const { data: projectData, isLoading, error } = useProjectDetail(joNumber)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageInput, setPageInput] = useState('')
+  const { data: projectData, isLoading, error } = useProjectDetail(joNumber, currentPage, LOGS_PER_PAGE)
   
   if (!joNumber) return null
 
@@ -37,6 +40,41 @@ const ProjectLogs: FC<ProjectLogsProps> = ({ joNumber }) => {
   }
 
   const projectLogs = projectData.logs || []
+  const logsPagination = projectData.logsPagination || { currentPage: 1, totalPages: 1, totalLogs: 0, limit: LOGS_PER_PAGE }
+  const logsCounts = projectData.logsCounts || { statusChanges: 0, activities: 0, incidents: 0 }
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage)
+    setPageInput('')
+    // Scroll to top of logs section
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    
+    // Allow empty string or only numbers
+    if (value === '' || /^\d+$/.test(value)) {
+      setPageInput(value)
+      
+      // Only navigate if it's a valid page number
+      if (value !== '') {
+        const page = parseInt(value)
+        if (page >= 1 && page <= logsPagination.totalPages) {
+          handlePageChange(page)
+        }
+      }
+    }
+  }
+
+  const handlePageInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      const page = parseInt(pageInput)
+      if (page >= 1 && page <= logsPagination.totalPages) {
+        handlePageChange(page)
+      }
+    }
+  }
 
   const getLogIcon = (logType: string) => {
     switch (logType) {
@@ -117,7 +155,7 @@ const ProjectLogs: FC<ProjectLogsProps> = ({ joNumber }) => {
       <CardHeader className="pb-4">
         <CardTitle className="flex items-center gap-2 text-gray-custom">
           <FileText className="h-5 w-5" />
-          Project Activity Logs ({projectLogs.length})
+          Project Activity Logs ({logsPagination.totalLogs})
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -188,23 +226,95 @@ const ProjectLogs: FC<ProjectLogsProps> = ({ joNumber }) => {
                 <CheckCircle className="h-4 w-4 text-green-600 mx-auto mb-1" />
                 <p className="font-medium text-gray-700">Status Changes</p>
                 <p className="text-lg font-bold text-green-600">
-                  {projectLogs.filter(log => log.log_type === 'status_change').length}
+                  {logsCounts.statusChanges}
                 </p>
               </div>
               <div className="bg-white p-3 rounded-lg text-center">
                 <Activity className="h-4 w-4 text-blue-600 mx-auto mb-1" />
                 <p className="font-medium text-gray-700">Activities</p>
                 <p className="text-lg font-bold text-blue-600">
-                  {projectLogs.filter(log => log.log_type === 'activity').length}
+                  {logsCounts.activities}
                 </p>
               </div>
               <div className="bg-white p-3 rounded-lg text-center">
                 <AlertCircle className="h-4 w-4 text-orange-600 mx-auto mb-1" />
                 <p className="font-medium text-gray-700">Incidents</p>
                 <p className="text-lg font-bold text-orange-600">
-                  {projectLogs.filter(log => log.log_type === 'incident').length}
+                  {logsCounts.incidents}
                 </p>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {logsPagination.totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-gray-200">
+            <div className="text-sm text-gray-600">
+              Showing {((logsPagination.currentPage - 1) * logsPagination.limit) + 1} to{' '}
+              {Math.min(logsPagination.currentPage * logsPagination.limit, logsPagination.totalLogs)} of{' '}
+              {logsPagination.totalLogs} logs
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* First Page */}
+              <button
+                onClick={() => handlePageChange(1)}
+                disabled={logsPagination.currentPage === 1}
+                className="p-2 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="First page"
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </button>
+
+              {/* Previous Page */}
+              <button
+                onClick={() => handlePageChange(logsPagination.currentPage - 1)}
+                disabled={logsPagination.currentPage === 1}
+                className="p-2 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Previous page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+
+              {/* Page Input */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">Page</span>
+                <input
+                  type="text"
+                  value={pageInput || logsPagination.currentPage}
+                  onChange={handlePageInputChange}
+                  onKeyDown={handlePageInputKeyDown}
+                  onBlur={() => setPageInput('')}
+                  onFocus={(e) => {
+                    setPageInput(logsPagination.currentPage.toString())
+                    e.target.select()
+                  }}
+                  placeholder={logsPagination.currentPage.toString()}
+                  className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <span className="text-sm text-gray-600">of {logsPagination.totalPages}</span>
+              </div>
+
+              {/* Next Page */}
+              <button
+                onClick={() => handlePageChange(logsPagination.currentPage + 1)}
+                disabled={logsPagination.currentPage === logsPagination.totalPages}
+                className="p-2 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Next page"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+
+              {/* Last Page */}
+              <button
+                onClick={() => handlePageChange(logsPagination.totalPages)}
+                disabled={logsPagination.currentPage === logsPagination.totalPages}
+                className="p-2 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Last page"
+              >
+                <ChevronsRight className="h-4 w-4" />
+              </button>
             </div>
           </div>
         )}

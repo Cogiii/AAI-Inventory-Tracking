@@ -5,6 +5,21 @@ export interface ProjectDetailResponse {
   project: ProjectInfo;
   project_days: ProjectDay[];
   logs: ProjectLog[];
+  logsPagination: LogsPagination;
+  logsCounts: LogsCounts;
+}
+
+export interface LogsPagination {
+  currentPage: number;
+  totalPages: number;
+  totalLogs: number;
+  limit: number;
+}
+
+export interface LogsCounts {
+  statusChanges: number;
+  activities: number;
+  incidents: number;
 }
 
 export interface ProjectInfo {
@@ -114,8 +129,8 @@ export interface Location {
 // API functions
 export const projectDetailAPI = {
   // Get complete project details by JO number
-  getProjectDetail: async (joNumber: string): Promise<ProjectDetailResponse> => {
-    const response = await api.get(`/project-detail/jo/${joNumber}`);
+  getProjectDetail: async (joNumber: string, logsPage: number = 1, logsLimit: number = 10): Promise<ProjectDetailResponse> => {
+    const response = await api.get(`/project-detail/jo/${joNumber}?logsPage=${logsPage}&logsLimit=${logsLimit}`);
     return response.data.data;
   },
 
