@@ -3,7 +3,7 @@ import type { FC, FormEvent } from 'react'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { ConfirmationModal, ItemSelector } from '@/components/ui'
-import { Plus, Minus, Package, Loader2, AlertTriangle, Calendar, Check } from 'lucide-react'
+import { Package, Loader2, AlertTriangle, Calendar, Check, X, Edit2, PackageCheck } from 'lucide-react'
 import { useAddProjectItems } from '@/hooks/useInventory'
 
 interface AddItemFormProps {
@@ -16,12 +16,15 @@ interface AddItemFormProps {
   onCancel: () => void
 }
 
-interface ItemRow {
+interface AddedItem {
   id: string
-  item_id: number | null
+  item_id: number
   allocated_quantity: number
-  selectedItem: any
-  availableQuantity: number
+  item_name: string
+  item_type: string
+  brand_name: string
+  available_quantity: number
+  isEditing: boolean
   quantityError: string
 }
 
@@ -35,16 +38,16 @@ const AddItemForm: FC<AddItemFormProps> = ({
   onCancel
 }) => {
   const addProjectItemsMutation = useAddProjectItems()
-  const [itemRows, setItemRows] = useState<ItemRow[]>([
-    {
-      id: '1',
-      item_id: null,
-      allocated_quantity: 0,
-      selectedItem: null,
-      availableQuantity: 0,
-      quantityError: ''
-    }
-  ])
+  
+  // State for added items list
+  const [addedItems, setAddedItems] = useState<AddedItem[]>([])
+  
+  // State for current input selection
+  const [currentItemId, setCurrentItemId] = useState<number | null>(null)
+  const [currentItemData, setCurrentItemData] = useState<any>(null)
+  const [currentQuantity, setCurrentQuantity] = useState<number>(0)
+  const [currentQuantityError, setCurrentQuantityError] = useState<string>('')
+  
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [pendingData, setPendingData] = useState<any[]>([])
   
@@ -101,58 +104,95 @@ const AddItemForm: FC<AddItemFormProps> = ({
     }
   }
 
-  const addNewRow = () => {
-    const newRow: ItemRow = {
+  // Validate quantity
+  const validateQuantity = (quantity: number, availableQty: number) => {
+    if (quantity <= 0) {
+      return 'Quantity must be greater than 0'
+    } else if (quantity > availableQty) {
+      return `Exceeds available quantity (${availableQty})`
+    }
+    return ''
+  }
+
+  // Add item to the list
+  const handleAddItem = () => {
+    if (!currentItemId || !currentItemData || currentQuantity <= 0) {
+      return
+    }
+
+    const error = validateQuantity(currentQuantity, currentItemData.available_quantity)
+    if (error) {
+      setCurrentQuantityError(error)
+      return
+    }
+
+    const newItem: AddedItem = {
       id: Date.now().toString(),
-      item_id: null,
-      allocated_quantity: 0,
-      selectedItem: null,
-      availableQuantity: 0,
+      item_id: currentItemId,
+      allocated_quantity: currentQuantity,
+      item_name: currentItemData.name,
+      item_type: currentItemData.type,
+      brand_name: currentItemData.brand_name || 'N/A',
+      available_quantity: currentItemData.available_quantity,
+      isEditing: false,
       quantityError: ''
     }
-    setItemRows(prev => [...prev, newRow])
+
+    setAddedItems(prev => [...prev, newItem])
+    
+    // Clear current selection
+    setCurrentItemId(null)
+    setCurrentItemData(null)
+    setCurrentQuantity(0)
+    setCurrentQuantityError('')
   }
 
-  const removeRow = (rowId: string) => {
-    if (itemRows.length > 1) {
-      setItemRows(prev => prev.filter(row => row.id !== rowId))
-    }
+  // Remove item from the list
+  const handleRemoveItem = (id: string) => {
+    setAddedItems(prev => prev.filter(item => item.id !== id))
   }
 
-  const updateRow = (rowId: string, field: keyof ItemRow, value: any) => {
-    setItemRows(prev => prev.map(row => 
-      row.id === rowId ? { ...row, [field]: value } : row
+  // Toggle edit mode for an item
+  const handleToggleEdit = (id: string) => {
+    setAddedItems(prev => prev.map(item => 
+      item.id === id ? { ...item, isEditing: !item.isEditing } : item
     ))
   }
 
-  const validateQuantity = (rowId: string, allocatedQty: number, availableQty: number) => {
-    let error = ''
+  // Update quantity for an item
+  const handleUpdateQuantity = (id: string, quantity: number) => {
+    const item = addedItems.find(i => i.id === id)
+    if (!item) return
+
+    const error = validateQuantity(quantity, item.available_quantity)
     
-    if (allocatedQty <= 0) {
-      error = 'Quantity must be greater than 0'
-    } else if (allocatedQty > availableQty) {
-      error = `Exceeds available quantity (${availableQty})`
-    }
-    
-    updateRow(rowId, 'quantityError', error)
+    setAddedItems(prev => prev.map(i => 
+      i.id === id ? { 
+        ...i, 
+        allocated_quantity: quantity, 
+        quantityError: error,
+        isEditing: error ? true : false
+      } : i
+    ))
   }
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
-    const validRows = itemRows.filter(row => 
-      row.item_id && 
-      row.allocated_quantity > 0 && 
-      !row.quantityError &&
-      row.selectedItem
-    )
     
-    if (validRows.length === 0) {
+    if (addedItems.length === 0) {
       return
     }
 
-    const itemsData = validRows.map(row => ({
-      item_id: row.item_id!,
-      allocated_quantity: row.allocated_quantity,
+    // Check for any quantity errors
+    const hasErrors = addedItems.some(item => item.quantityError)
+    if (hasErrors) {
+      return
+    }
+
+    // Convert to items data
+    const itemsData = addedItems.map(item => ({
+      item_id: item.item_id,
+      allocated_quantity: item.allocated_quantity,
       status: 'allocated'
     }))
 
@@ -171,14 +211,11 @@ const AddItemForm: FC<AddItemFormProps> = ({
       })
       
       // Reset form
-      setItemRows([{
-        id: '1',
-        item_id: null,
-        allocated_quantity: 0,
-        selectedItem: null,
-        availableQuantity: 0,
-        quantityError: ''
-      }])
+      setAddedItems([])
+      setCurrentItemId(null)
+      setCurrentItemData(null)
+      setCurrentQuantity(0)
+      setCurrentQuantityError('')
       setSelectedProjectDays(new Set())
       setApplyToAll(false)
       setPendingData([])
@@ -192,147 +229,249 @@ const AddItemForm: FC<AddItemFormProps> = ({
 
   const handleCancel = () => {
     // Reset form on cancel
-    setItemRows([{
-      id: '1',
-      item_id: null,
-      allocated_quantity: 0,
-      selectedItem: null,
-      availableQuantity: 0,
-      quantityError: ''
-    }])
+    setAddedItems([])
+    setCurrentItemId(null)
+    setCurrentItemData(null)
+    setCurrentQuantity(0)
+    setCurrentQuantityError('')
     onCancel()
   }
 
-  const getItemName = (item: any) => {
-    return item ? item.name : ''
-  }
-
-  const isFormValid = 
-    itemRows.some(row => 
-      row.item_id && 
-      row.allocated_quantity > 0 && 
-      !row.quantityError &&
-      row.selectedItem
-    ) && selectedProjectDays.size > 0
+  const isFormValid = addedItems.length > 0 && selectedProjectDays.size > 0 && !addedItems.some(item => item.quantityError)
+  
+  const canAddCurrent = currentItemId && currentItemData && currentQuantity > 0 && !currentQuantityError
 
   return (
     <>
-      <Modal isOpen={isOpen && !showConfirmation} onClose={handleCancel} title="Add New Items" size="4xl">
-        <ModalBody>
+      <Modal isOpen={isOpen} onClose={handleCancel} title="Add Items" size="5xl">
+        <ModalBody className='overflow-y-auto max-h-[70vh] modal-scrollbar'>
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Package className="h-5 w-5 text-blue-600" />
-                <span className="text-lg font-medium text-gray-900">
-                  Add Items to Schedule
-                </span>
-              </div>
-              <Button
-                type="button"
-                onClick={addNewRow}
-                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 transform hover:scale-105 transition-all duration-200 shadow-md hover:shadow-lg"
-              >
-                <Plus className="h-4 w-4" />
-                Add Row
-              </Button>
+            <div className="flex items-center gap-2">
+              <Package className="h-5 w-5 text-blue-600" />
+              <span className="text-lg font-medium text-gray-900">
+                Add Items to Schedule
+              </span>
             </div>
 
-            {/* Items Grid */}
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {itemRows.map((row, index) => (
-                <div
-                  key={row.id}
-                  className="grid grid-cols-12 gap-4 p-6 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors duration-200"
-                >
-                  {/* Row Number */}
-                  <div className="col-span-1 flex items-center justify-center">
-                    <span className="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
-                      {index + 1}
-                    </span>
+            {/* Added Items List */}
+            {addedItems.length > 0 && (
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200 p-4 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <PackageCheck className="h-5 w-5 text-blue-600" />
+                    <h3 className="text-sm font-semibold text-gray-800">
+                      Items to Add ({addedItems.length})
+                    </h3>
                   </div>
+                </div>
+                
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {addedItems.map((item, index) => (
+                    <div
+                      key={item.id}
+                      className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-all duration-200"
+                    >
+                      <div className="flex items-start gap-3">
+                        {/* Number Badge */}
+                        <div className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-semibold">
+                          {index + 1}
+                        </div>
 
-                  {/* Item Selection - Wider column for better readability */}
-                  <div className="col-span-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Select Item
-                    </label>
-                    <ItemSelector
-                      value={row.item_id}
-                      joNumber={joNumber}
-                      onChange={(itemId, itemData) => {
-                        updateRow(row.id, 'item_id', itemId)
-                        updateRow(row.id, 'selectedItem', itemData)
-                        updateRow(row.id, 'availableQuantity', itemData?.available_quantity || 0)
-                        updateRow(row.id, 'quantityError', '')
-                        
-                        // Validate current allocated quantity against new item
-                        if (row.allocated_quantity > 0) {
-                          setTimeout(() => validateQuantity(row.id, row.allocated_quantity, itemData?.available_quantity || 0), 0)
+                        {/* Item Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Package className="h-4 w-4 text-gray-500 flex-shrink-0" />
+                                <span className="text-sm font-semibold text-gray-900 truncate">
+                                  {item.item_name}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3 mb-2 text-xs text-gray-600">
+                                <span className="px-2 py-0.5 bg-gray-100 rounded">
+                                  {item.item_type}
+                                </span>
+                                <span>{item.brand_name}</span>
+                              </div>
+                              
+                              {/* Quantity Section */}
+                              <div className="flex items-center gap-2">
+                                {item.isEditing ? (
+                                  <div className="flex-1 max-w-xs">
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        max={item.available_quantity}
+                                        value={item.allocated_quantity}
+                                        onChange={(e) => handleUpdateQuantity(item.id, parseInt(e.target.value) || 0)}
+                                        className={`w-24 px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 ${
+                                          item.quantityError
+                                            ? 'border-red-300 focus:ring-red-500'
+                                            : 'border-gray-300 focus:ring-blue-500'
+                                        }`}
+                                      />
+                                      <span className="text-xs text-gray-500">
+                                        / {item.available_quantity} available
+                                      </span>
+                                    </div>
+                                    {item.quantityError && (
+                                      <div className="flex items-center gap-1 text-xs text-red-600 mt-1">
+                                        <AlertTriangle className="h-3 w-3" />
+                                        {item.quantityError}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2 py-1 rounded">
+                                    Quantity: {item.allocated_quantity} / {item.available_quantity}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleEdit(item.id)}
+                                className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md transition-colors"
+                                title={item.isEditing ? "Save changes" : "Edit quantity"}
+                              >
+                                {item.isEditing ? (
+                                  <Check className="h-4 w-4" />
+                                ) : (
+                                  <Edit2 className="h-4 w-4" />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItem(item.id)}
+                                className="p-1.5 text-red-600 hover:bg-red-100 rounded-md transition-colors"
+                                title="Remove item"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Input Section */}
+            <div className="bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Package className="h-5 w-5 text-gray-600" />
+                <span className="text-sm font-semibold text-gray-700">
+                  Add New Item
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-12 gap-4 items-start">
+                {/* Item Selection */}
+                <div className="col-span-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Item
+                  </label>
+                  <ItemSelector
+                    value={currentItemId}
+                    joNumber={joNumber}
+                    onChange={(itemId, itemData) => {
+                      setCurrentItemId(itemId)
+                      setCurrentItemData(itemData)
+                      setCurrentQuantityError('')
+                      
+                      // Validate current quantity against new item
+                      if (currentQuantity > 0 && itemData) {
+                        const error = validateQuantity(currentQuantity, itemData.available_quantity)
+                        setCurrentQuantityError(error)
+                      }
+                    }}
+                    placeholder="Search and select item..."
+                    className="min-w-0"
+                  />
+                </div>
+
+                {/* Quantity Input */}
+                <div className="col-span-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Allocated Quantity
+                  </label>
+                  <div className="space-y-1">
+                    <input
+                      type="number"
+                      min="1"
+                      max={currentItemData?.available_quantity || 999999}
+                      value={currentQuantity || ''}
+                      onChange={(e) => {
+                        const quantity = parseInt(e.target.value) || 0
+                        setCurrentQuantity(quantity)
+                        if (currentItemData) {
+                          const error = validateQuantity(quantity, currentItemData.available_quantity)
+                          setCurrentQuantityError(error)
                         }
                       }}
-                      placeholder="Search and select an item..."
-                      className="w-full"
+                      className={`w-full px-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:border-transparent ${
+                        currentQuantityError
+                          ? 'border-red-300 focus:ring-red-500'
+                          : 'border-gray-300 focus:ring-blue-500'
+                      }`}
+                      placeholder="0"
+                      disabled={!currentItemData}
                     />
-                  </div>
-
-                  {/* Allocated Quantity */}
-                  <div className="col-span-3">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Allocated Quantity
-                    </label>
-                    <div className="space-y-1">
-                      <input
-                        type="number"
-                        min="1"
-                        max={row.availableQuantity}
-                        value={row.allocated_quantity || ''}
-                        onChange={(e) => {
-                          const quantity = parseInt(e.target.value) || 0
-                          updateRow(row.id, 'allocated_quantity', quantity)
-                          validateQuantity(row.id, quantity, row.availableQuantity)
-                        }}
-                        className={`w-full px-4 py-3 border rounded-md text-sm focus:outline-none focus:ring-2 focus:border-transparent bg-white ${
-                          row.quantityError
-                            ? 'border-red-300 focus:ring-red-500'
-                            : 'border-gray-300 focus:ring-blue-500'
-                        }`}
-                        placeholder="0"
-                        disabled={!row.selectedItem}
-                      />
-                      {row.selectedItem && (
-                        <div className="text-xs text-gray-500">
-                          Available: {row.availableQuantity}
-                        </div>
-                      )}
-                      {row.quantityError && (
-                        <div className="flex items-center gap-1 text-xs text-red-600">
-                          <AlertTriangle className="h-3 w-3" />
-                          {row.quantityError}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-
-
-                  {/* Remove Button */}
-                  <div className="col-span-1 flex items-end justify-center">
-                    {itemRows.length > 1 && (
-                      <Button
-                        type="button"
-                        onClick={() => removeRow(row.id)}
-                        className="p-3 bg-red-100 hover:bg-red-200 text-red-600 hover:text-red-700 border border-red-200 hover:border-red-300 transform hover:scale-110 transition-all duration-200"
-                      >
-                        <Minus className="h-4 w-4" />
-                      </Button>
+                    {currentItemData && (
+                      <div className="text-xs text-gray-500">
+                        Available: {currentItemData.available_quantity}
+                      </div>
+                    )}
+                    {currentQuantityError && (
+                      <div className="flex items-center gap-1 text-xs text-red-600">
+                        <AlertTriangle className="h-3 w-3" />
+                        {currentQuantityError}
+                      </div>
                     )}
                   </div>
                 </div>
-              ))}
+
+                {/* Add Button */}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">
+                    Action
+                  </label>
+                  <Button
+                    type="button"
+                    onClick={handleAddItem}
+                    disabled={!canAddCurrent}
+                    className={`w-full py-2.5 flex items-center justify-center gap-2 transition-all duration-200 ${
+                      canAddCurrent
+                        ? 'bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg transform hover:scale-105'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    <PackageCheck className="h-4 w-4" />
+                    Add
+                  </Button>
+                </div>
+              </div>
+
+              {/* Helper Text */}
+              {canAddCurrent && (
+                <div className="mt-3 flex items-center gap-2 text-xs text-gray-600 bg-blue-50 border border-blue-200 rounded-lg p-2">
+                  <Check className="h-3.5 w-3.5 text-green-600" />
+                  <span>
+                    Ready to add <span className="font-semibold">{currentItemData?.name}</span> with{' '}
+                    <span className="font-semibold">{currentQuantity} units</span>
+                  </span>
+                </div>
+              )}
             </div>
 
-            {/* Apply to All Days Toggle */}
+            {/* Project Days Selection */}
             <div className="border-t border-gray-200 pt-4">
               <div className="space-y-4">
                 {/* Header with "Apply to All" checkbox */}
@@ -451,36 +590,31 @@ const AddItemForm: FC<AddItemFormProps> = ({
               </div>
             </div>
 
-            {/* Summary */}
-            {itemRows.some(row => row.item_id && row.allocated_quantity > 0 && !row.quantityError) && (
-              <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                <h4 className="text-sm font-medium text-green-800 mb-2">
-                  Items to Add ({itemRows.filter(row => row.item_id && row.allocated_quantity > 0 && !row.quantityError).length})
-                </h4>
-                <div className="space-y-1">
-                  {itemRows
-                    .filter(row => row.item_id && row.allocated_quantity > 0 && !row.quantityError)
-                    .map((row, index) => (
-                      <div key={row.id} className="text-xs text-green-700">
-                        {index + 1}. {getItemName(row.selectedItem)} - {row.allocated_quantity} units (allocated)
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
+            {/* Summary removed - no longer needed with new design */}
           </form>
         </ModalBody>
 
         <ModalFooter>
           <div className="flex justify-between items-center w-full">
-            <div className="text-sm text-gray-600">
-              <span className="font-medium">{itemRows.filter(row => row.item_id && row.allocated_quantity > 0 && !row.quantityError).length}</span> item(s) • 
-              <span className="font-medium ml-1">{selectedProjectDays.size}</span> day(s) selected
+            <div className="flex items-center gap-2">
+              {addedItems.length > 0 ? (
+                <>
+                  <div className="flex items-center justify-center w-8 h-8 bg-green-100 rounded-full">
+                    <Check className="h-4 w-4 text-green-600" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-700">
+                    {addedItems.length} item(s) ready to add
+                  </span>
+                </>
+              ) : (
+                <span className="text-sm text-gray-500">
+                  Add items to continue
+                </span>
+              )}
             </div>
             <div className="flex gap-2">
               <Button 
                 onClick={handleCancel}
-                disabled={addProjectItemsMutation.isPending}
                 className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 transform hover:scale-105 transition-all duration-200 shadow-sm hover:shadow-md"
               >
                 Cancel
@@ -500,7 +634,7 @@ const AddItemForm: FC<AddItemFormProps> = ({
                     Adding...
                   </>
                 ) : (
-                  `Add to ${selectedProjectDays.size} Day(s)`
+                  <>Add {addedItems.length} Item(s)</>
                 )}
               </Button>
             </div>
@@ -512,20 +646,7 @@ const AddItemForm: FC<AddItemFormProps> = ({
       <ConfirmationModal
         isOpen={showConfirmation}
         title="Confirm Add Items"
-        message={
-          <div className="space-y-2">
-            <p>
-              Are you sure you want to add <strong>{pendingData.length} item(s)</strong> to <strong>{selectedProjectDays.size} project day(s)</strong>?
-            </p>
-            <div className="text-sm text-gray-600 mt-2">
-              {selectedProjectDays.size === projectDays.length ? (
-                <p className="text-blue-600">✓ Items will be added to all project days</p>
-              ) : (
-                <p>Items will be added to the selected days only</p>
-              )}
-            </div>
-          </div>
-        }
+        message={`Are you sure you want to add ${pendingData.length} item(s) to ${selectedProjectDays.size} project day(s)?`}
         onConfirm={handleConfirmedAdd}
         onClose={() => {
           setShowConfirmation(false)

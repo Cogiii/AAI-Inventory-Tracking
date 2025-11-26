@@ -185,7 +185,7 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
         </div>
       </CardHeader>
       
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-3 max-h-[600px] overflow-y-auto">
         {displayItems.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <Package className="h-12 w-12 mx-auto mb-3 text-gray-300" />

@@ -104,6 +104,7 @@ router.get('/jo/:joNumber', async (req, res) => {
         pp.role_id,
         per.name as personnel_name,
         per.contact_number,
+        per.is_active,
         r.name as role_name
       FROM project_personnel pp
       JOIN personnel per ON pp.personnel_id = per.id
@@ -257,7 +258,7 @@ router.get('/personnel', async (req, res) => {
         contact_number,
         is_active
       FROM personnel
-      WHERE is_active = true
+      WHERE is_active = 1
       ORDER BY name ASC
     `;
     
@@ -352,7 +353,7 @@ router.get('/locations', async (req, res) => {
  * POST /api/project-detail/personnel
  * Add personnel to project day(s)
  */
-router.post('/personnel', async (req, res) => {
+router.post('/personnel', auth, async (req, res) => {
   const { joNumber, project_day_ids, personnel_assignments } = req.body;
   
   try {
@@ -458,9 +459,7 @@ router.post('/personnel', async (req, res) => {
         VALUES (?, 'activity', ?, ?, NOW())
       `;
       
-      // Note: In a real app, you'd get the user ID from authentication middleware
-      // For now, we'll use NULL or you can add a recorded_by field to the request
-      await pool.execute(logQuery, [projectId, logDescription, req.body.recorded_by || null]);
+      await pool.execute(logQuery, [projectId, logDescription, req.user?.id || null]);
     }
     
     res.json({
@@ -482,7 +481,7 @@ router.post('/personnel', async (req, res) => {
  * DELETE /api/project-detail/personnel/:joNumber/:projectDayId/:personnelId/:roleId
  * Remove personnel from project day
  */
-router.delete('/personnel/:joNumber/:projectDayId/:personnelId/:roleId', async (req, res) => {
+router.delete('/personnel/:joNumber/:projectDayId/:personnelId/:roleId', auth, async (req, res) => {
   const { joNumber, projectDayId, personnelId, roleId } = req.params;
   
   try {
@@ -529,7 +528,7 @@ router.delete('/personnel/:joNumber/:projectDayId/:personnelId/:roleId', async (
       VALUES (?, ?, 'activity', ?, ?, NOW())
     `;
     
-    await pool.execute(logQuery, [projectId, projectDayId, logDescription, req.body?.recorded_by || null]);
+    await pool.execute(logQuery, [projectId, projectDayId, logDescription, req.user?.id || null]);
     
     res.json({
       success: true,
@@ -549,7 +548,7 @@ router.delete('/personnel/:joNumber/:projectDayId/:personnelId/:roleId', async (
  * POST /api/project-detail/project-days
  * Add new project day
  */
-router.post('/project-days', async (req, res) => {
+router.post('/project-days', auth, async (req, res) => {
   const { project_id, project_date, location_id } = req.body;
   
   try {
@@ -644,7 +643,7 @@ router.post('/project-days', async (req, res) => {
  * PUT /api/project-detail/project-days/:id
  * Update project day
  */
-router.put('/project-days/:id', async (req, res) => {
+router.put('/project-days/:id', auth, async (req, res) => {
   const { id } = req.params;
   const { project_date, location_id } = req.body;
   
@@ -756,7 +755,7 @@ router.put('/project-days/:id', async (req, res) => {
  * DELETE /api/project-detail/project-days/:id
  * Delete project day (supports force delete with ?force=true)
  */
-router.delete('/project-days/:id', async (req, res) => {
+router.delete('/project-days/:id', auth, async (req, res) => {
   const { id } = req.params;
   const { force } = req.query; // Check for force parameter
   
@@ -1005,7 +1004,7 @@ router.post('/project-items', auth, async (req, res) => {
         VALUES (?, 'activity', ?, ?, NOW())
       `;
       
-      await pool.execute(logQuery, [projectId, logDescription, req.body.recorded_by || null]);
+      await pool.execute(logQuery, [projectId, logDescription, req.user?.id || null]);
     }
     
     res.json({

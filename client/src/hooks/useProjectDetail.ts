@@ -64,7 +64,8 @@ export const useAddPersonnel = () => {
       // Invalidate and refetch project detail for the affected project
       const joNumber = variables.joNumber;
       queryClient.invalidateQueries({ 
-        queryKey: PROJECT_DETAIL_KEYS.detail(joNumber) 
+        queryKey: ['project-detail', 'detail', joNumber],
+        exact: false
       });
     },
   });
@@ -79,7 +80,8 @@ export const useRemovePersonnel = () => {
       // Invalidate project detail data
       const joNumber = variables.joNumber;
       queryClient.invalidateQueries({ 
-        queryKey: PROJECT_DETAIL_KEYS.detail(joNumber) 
+        queryKey: ['project-detail', 'detail', joNumber],
+        exact: false
       });
     },
   });
@@ -94,7 +96,8 @@ export const useAddProjectDay = () => {
       // Invalidate project detail data
       const joNumber = variables.joNumber;
       queryClient.invalidateQueries({ 
-        queryKey: PROJECT_DETAIL_KEYS.detail(joNumber) 
+        queryKey: ['project-detail', 'detail', joNumber],
+        exact: false
       });
     },
   });
@@ -109,7 +112,8 @@ export const useUpdateProjectDay = () => {
       // Invalidate project detail data
       const joNumber = variables.joNumber;
       queryClient.invalidateQueries({ 
-        queryKey: PROJECT_DETAIL_KEYS.detail(joNumber) 
+        queryKey: ['project-detail', 'detail', joNumber],
+        exact: false
       });
     },
   });
@@ -124,15 +128,18 @@ export const useDeleteProjectDay = () => {
       // Invalidate project detail data
       const joNumber = variables.joNumber;
       queryClient.invalidateQueries({ 
-        queryKey: PROJECT_DETAIL_KEYS.detail(joNumber) 
+        queryKey: ['project-detail', 'detail', joNumber],
+        exact: false
       });
       // Invalidate available items for this project
       queryClient.invalidateQueries({ 
-        queryKey: PROJECT_DETAIL_KEYS.availableItems(joNumber) 
+        queryKey: ['project-detail', 'available-items', joNumber],
+        exact: false
       });
       // Invalidate all inventory queries since items are restored to inventory
       queryClient.invalidateQueries({ 
-        queryKey: ['inventory'] 
+        queryKey: ['inventory'],
+        exact: false
       });
     },
   });
@@ -147,14 +154,17 @@ export const useAddProjectItems = () => {
       // Invalidate both project detail and available items
       const joNumber = variables.joNumber;
       queryClient.invalidateQueries({ 
-        queryKey: PROJECT_DETAIL_KEYS.detail(joNumber) 
+        queryKey: ['project-detail', 'detail', joNumber],
+        exact: false
       });
       queryClient.invalidateQueries({ 
-        queryKey: PROJECT_DETAIL_KEYS.availableItems(joNumber) 
+        queryKey: ['project-detail', 'available-items', joNumber],
+        exact: false
       });
       // Also invalidate inventory queries to update stock everywhere
       queryClient.invalidateQueries({ 
-        queryKey: ['inventory'] 
+        queryKey: ['inventory'],
+        exact: false
       });
     },
   });
@@ -169,14 +179,17 @@ export const useUpdateProjectItem = () => {
       // Invalidate project detail and available items data
       const joNumber = variables.joNumber;
       queryClient.invalidateQueries({ 
-        queryKey: PROJECT_DETAIL_KEYS.detail(joNumber) 
+        queryKey: ['project-detail', 'detail', joNumber],
+        exact: false
       });
       queryClient.invalidateQueries({ 
-        queryKey: PROJECT_DETAIL_KEYS.availableItems(joNumber) 
+        queryKey: ['project-detail', 'available-items', joNumber],
+        exact: false
       });
       // Also invalidate inventory queries to update stock everywhere
       queryClient.invalidateQueries({ 
-        queryKey: ['inventory'] 
+        queryKey: ['inventory'],
+        exact: false
       });
     },
   });
@@ -191,14 +204,17 @@ export const useDeleteProjectItem = () => {
       // Invalidate both project detail and available items
       const joNumber = variables.joNumber;
       queryClient.invalidateQueries({ 
-        queryKey: PROJECT_DETAIL_KEYS.detail(joNumber) 
+        queryKey: ['project-detail', 'detail', joNumber],
+        exact: false
       });
       queryClient.invalidateQueries({ 
-        queryKey: PROJECT_DETAIL_KEYS.availableItems(joNumber) 
+        queryKey: ['project-detail', 'available-items', joNumber],
+        exact: false
       });
       // Also invalidate inventory queries to update stock everywhere
       queryClient.invalidateQueries({ 
-        queryKey: ['inventory'] 
+        queryKey: ['inventory'],
+        exact: false
       });
     },
   });

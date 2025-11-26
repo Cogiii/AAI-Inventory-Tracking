@@ -9,6 +9,7 @@ interface PersonnelSelectorProps {
   placeholder?: string
   allowCreate?: boolean
   className?: string
+  excludeIds?: number[] // Personnel IDs to exclude from the list
 }
 
 const PersonnelSelector: React.FC<PersonnelSelectorProps> = ({
@@ -16,7 +17,8 @@ const PersonnelSelector: React.FC<PersonnelSelectorProps> = ({
   onChange,
   placeholder = "Search or select personnel...",
   allowCreate = false,
-  className = ""
+  className = "",
+  excludeIds = []
 }) => {
   const [isOpen, setIsOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -36,8 +38,15 @@ const PersonnelSelector: React.FC<PersonnelSelectorProps> = ({
   const personnel = personnelRolesData?.personnel || []
   const selectedPersonnel = value ? personnel.find((p: any) => p.id === value) : null
 
-  // Filter personnel based on search query
+  // Filter personnel based on search query, active status, and exclusions
   const filteredPersonnel = personnel.filter((person: any) => {
+    // Exclude personnel in excludeIds list
+    if (excludeIds.includes(person.id)) return false
+    
+    // Only show active personnel
+    if (person.is_active === false || person.is_active === 0) return false
+    
+    // Filter by search query
     if (!searchQuery) return true
     
     const query = searchQuery.toLowerCase()

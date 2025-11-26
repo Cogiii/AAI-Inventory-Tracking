@@ -3,7 +3,7 @@ import type { FC } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmationModal } from '@/components/ui'
 import { Users, User, Phone, Calendar, Briefcase, Plus, Trash2, Loader2, AlertTriangle } from 'lucide-react'
-import AddPersonnelForm from '../modals/AddPersonnelForm'
+import AddPersonnelForm from '@/pages/ProjectDetail/modals/AddPersonnelForm'
 import { useProjectDetail, useRemovePersonnel } from '@/hooks/useProjectDetail'
 
 
@@ -174,7 +174,7 @@ const ProjectPersonnel: FC<ProjectPersonnelProps> = ({ joNumber }) => {
         </div>
       </CardHeader>
       
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 max-h-[600px] overflow-y-auto">
         {displayPersonnel.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <Users className="h-12 w-12 mx-auto mb-3 text-gray-300" />
@@ -212,11 +212,6 @@ const ProjectPersonnel: FC<ProjectPersonnelProps> = ({ joNumber }) => {
                                     Day {projectDays.findIndex(d => d.id === person.project_day_id) + 1}
                                   </span>
                                 )}
-                                {!person.is_active && (
-                                  <span className="px-2 py-1 text-xs bg-red-100 text-red-600 rounded-full">
-                                    Inactive
-                                  </span>
-                                )}
                                 <button
                                   onClick={() => handleDeleteClick(person, person.project_day_id)}
                                   className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -241,30 +236,6 @@ const ProjectPersonnel: FC<ProjectPersonnelProps> = ({ joNumber }) => {
                 </div>
               </div>
             ))}
-            
-            {/* Summary Stats */}
-            <div className="border-t pt-4 mt-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="bg-white p-3 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-green-600" />
-                    <span className="font-medium text-gray-700">Active:</span>
-                  </div>
-                  <p className="text-lg font-bold text-green-600 mt-1">
-                    {displayPersonnel.filter(p => p.is_active).length}
-                  </p>
-                </div>
-                <div className="bg-white p-3 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Briefcase className="h-4 w-4 text-blue-600" />
-                    <span className="font-medium text-gray-700">Roles:</span>
-                  </div>
-                  <p className="text-lg font-bold text-blue-600 mt-1">
-                    {Object.keys(groupedPersonnel).length}
-                  </p>
-                </div>
-              </div>
-            </div>
           </div>
         )}
 

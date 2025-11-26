@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { FC , FormEvent } from 'react'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 
 import { ConfirmationModal, PersonnelSelector, RoleSelector } from '@/components/ui'
-import { ToggleLeft, ToggleRight, Plus, Minus, Users, User, Loader2 } from 'lucide-react'
+import { Users, User, Loader2, Calendar, Check, X, Edit2, Phone, Briefcase, UserCheck } from 'lucide-react'
 import { usePersonnelRoles, useAddPersonnel } from '@/hooks/useProjectDetail'
 
 interface AddPersonnelFormProps {
@@ -17,12 +17,14 @@ interface AddPersonnelFormProps {
   onCancel: () => void
 }
 
-interface PersonnelRow {
+interface AddedPersonnel {
   id: string
-  personnel_id: number | null
-  role_id: number | null
-  selectedPersonnel: any
-  selectedRole: any
+  personnel_id: number
+  role_id: number
+  personnel_name: string
+  contact_number: string
+  role_name: string
+  isEditing: boolean
 }
 
 const AddPersonnelForm: FC<AddPersonnelFormProps> = ({
@@ -37,76 +39,158 @@ const AddPersonnelForm: FC<AddPersonnelFormProps> = ({
   // Hooks
   const { isLoading: personnelRolesLoading } = usePersonnelRoles()
   const addPersonnelMutation = useAddPersonnel()
-  const [personnelRows, setPersonnelRows] = useState<PersonnelRow[]>([
-    {
-      id: '1',
-      personnel_id: null,
-      role_id: null,
-      selectedPersonnel: null,
-      selectedRole: null
-    }
-  ])
+  
+  // State for added personnel list
+  const [addedPersonnel, setAddedPersonnel] = useState<AddedPersonnel[]>([])
+  
+  // State for current input selection
+  const [currentPersonnelId, setCurrentPersonnelId] = useState<number | null>(null)
+  const [currentRoleId, setCurrentRoleId] = useState<number | null>(null)
+  const [currentPersonnelData, setCurrentPersonnelData] = useState<any>(null)
+  const [currentRoleData, setCurrentRoleData] = useState<any>(null)
+  
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [pendingData, setPendingData] = useState<any[]>([])
+  
+  // State for selected project days
+  const [selectedProjectDays, setSelectedProjectDays] = useState<Set<number>>(new Set())
+  const [applyToAll, setApplyToAll] = useState(false)
 
-  const addNewRow = () => {
-    const newRow: PersonnelRow = {
+  // Get all personnel IDs that are already assigned to the project
+  const getExistingPersonnelIds = () => {
+    const existingIds = new Set<number>()
+    
+    // Add personnel from all project days
+    projectDays.forEach(day => {
+      if (day.personnel && Array.isArray(day.personnel)) {
+        day.personnel.forEach((person: any) => {
+          existingIds.add(person.personnel_id)
+        })
+      }
+    })
+    
+    // Add personnel from the current "to be added" list
+    addedPersonnel.forEach(person => {
+      existingIds.add(person.personnel_id)
+    })
+    
+    return Array.from(existingIds)
+  }
+
+  // Initialize selected days when modal opens
+  useEffect(() => {
+    if (isOpen && projectDays.length > 0) {
+      if (applyToAllDays) {
+        // If coming from "apply to all days", select all
+        setSelectedProjectDays(new Set(projectDays.map(day => day.id)))
+        setApplyToAll(true)
+      } else if (selectedDay !== 'all' && typeof selectedDay === 'number') {
+        // If a specific day was selected, only select that one
+        setSelectedProjectDays(new Set([selectedDay]))
+        setApplyToAll(false)
+      } else {
+        // Default: select all days
+        setSelectedProjectDays(new Set(projectDays.map(day => day.id)))
+        setApplyToAll(true)
+      }
+    }
+  }, [isOpen, projectDays, selectedDay, applyToAllDays])
+
+  // Toggle individual day selection
+  const toggleDaySelection = (dayId: number) => {
+    setSelectedProjectDays(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(dayId)) {
+        newSet.delete(dayId)
+      } else {
+        newSet.add(dayId)
+      }
+      
+      // Update "apply to all" based on selection
+      setApplyToAll(newSet.size === projectDays.length)
+      
+      return newSet
+    })
+  }
+
+  // Toggle apply to all days
+  const toggleApplyToAll = () => {
+    if (applyToAll) {
+      // Uncheck all
+      setSelectedProjectDays(new Set())
+      setApplyToAll(false)
+    } else {
+      // Check all
+      setSelectedProjectDays(new Set(projectDays.map(day => day.id)))
+      setApplyToAll(true)
+    }
+  }
+
+  // Add personnel to the list
+  const handleAddPersonnel = () => {
+    if (!currentPersonnelId || !currentRoleId || !currentPersonnelData || !currentRoleData) {
+      return
+    }
+
+    const newPersonnel: AddedPersonnel = {
       id: Date.now().toString(),
-      personnel_id: null,
-      role_id: null,
-      selectedPersonnel: null,
-      selectedRole: null
+      personnel_id: currentPersonnelId,
+      role_id: currentRoleId,
+      personnel_name: currentPersonnelData.name,
+      contact_number: currentPersonnelData.contact_number,
+      role_name: currentRoleData.name,
+      isEditing: false
     }
-    setPersonnelRows(prev => [...prev, newRow])
+
+    setAddedPersonnel(prev => [...prev, newPersonnel])
+    
+    // Clear current selection
+    setCurrentPersonnelId(null)
+    setCurrentRoleId(null)
+    setCurrentPersonnelData(null)
+    setCurrentRoleData(null)
   }
 
-  const removeRow = (rowId: string) => {
-    if (personnelRows.length > 1) {
-      setPersonnelRows(prev => prev.filter(row => row.id !== rowId))
-    }
+  // Remove personnel from the list
+  const handleRemovePersonnel = (id: string) => {
+    setAddedPersonnel(prev => prev.filter(p => p.id !== id))
   }
 
-
-
-  const handlePersonnelChange = (rowId: string, personnelId: number | null, personnelData?: any) => {
-    setPersonnelRows(prev => prev.map(row => 
-      row.id === rowId ? { 
-        ...row, 
-        personnel_id: personnelId, 
-        selectedPersonnel: personnelData 
-      } : row
+  // Toggle edit mode for a personnel
+  const handleToggleEdit = (id: string) => {
+    setAddedPersonnel(prev => prev.map(p => 
+      p.id === id ? { ...p, isEditing: !p.isEditing } : p
     ))
   }
 
-  const handleRoleChange = (rowId: string, roleId: number | null, roleData?: any) => {
-    setPersonnelRows(prev => prev.map(row => 
-      row.id === rowId ? { 
-        ...row, 
+  // Update role for a personnel
+  const handleUpdateRole = (id: string, roleId: number | null, roleData?: any) => {
+    if (!roleId || !roleData) return
+
+    setAddedPersonnel(prev => prev.map(p => 
+      p.id === id ? { 
+        ...p, 
         role_id: roleId, 
-        selectedRole: roleData 
-      } : row
+        role_name: roleData.name,
+        isEditing: false 
+      } : p
     ))
   }
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     
-    // Validate all rows
-    const validRows = personnelRows.filter(row => 
-      row.personnel_id && row.role_id && row.selectedPersonnel && row.selectedRole
-    )
-    
-    if (validRows.length === 0) {
+    if (addedPersonnel.length === 0) {
       return
     }
 
     // Convert to personnel data
-    const personnelData = validRows.map(row => ({
-      personnel_id: row.personnel_id,
-      role_id: row.role_id,
-      personnel_name: row.selectedPersonnel.name,
-      contact_number: row.selectedPersonnel.contact_number,
-      role_name: row.selectedRole.name
+    const personnelData = addedPersonnel.map(p => ({
+      personnel_id: p.personnel_id,
+      role_id: p.role_id,
+      personnel_name: p.personnel_name,
+      contact_number: p.contact_number,
+      role_name: p.role_name
     }))
 
     setPendingData(personnelData)
@@ -114,61 +198,48 @@ const AddPersonnelForm: FC<AddPersonnelFormProps> = ({
   }
 
   const handleConfirmedAdd = async () => {
-    if (pendingData.length > 0) {
-      try {
-        // Determine which project days to assign to
-        const targetProjectDayIds = applyToAllDays 
-          ? projectDays.map(day => day.id)
-          : selectedDay === 'all' 
-            ? projectDays.map(day => day.id)
-            : [selectedDay as number]
+    if (pendingData.length === 0 || selectedProjectDays.size === 0) return
 
-        // Prepare personnel assignments
-        const personnel_assignments = pendingData.map(personnel => ({
+    try {
+      await addPersonnelMutation.mutateAsync({
+        joNumber,
+        project_day_ids: Array.from(selectedProjectDays),
+        personnel_assignments: pendingData.map(personnel => ({
           personnel_id: personnel.personnel_id,
           role_id: personnel.role_id
         }))
-
-        // Call the mutation
-        await addPersonnelMutation.mutateAsync({
-          joNumber,
-          project_day_ids: targetProjectDayIds,
-          personnel_assignments
-        })
-
-        // Reset form
-        setPersonnelRows([{
-          id: '1',
-          personnel_id: null,
-          role_id: null,
-          selectedPersonnel: null,
-          selectedRole: null
-        }])
-        setPendingData([])
-        setShowConfirmation(false)
-        onCancel() // Close the modal
-      } catch (error) {
-        console.error('Error adding personnel:', error)
-        // Handle error - could show toast notification here
-      }
+      })
+      
+      // Reset form
+      setAddedPersonnel([])
+      setCurrentPersonnelId(null)
+      setCurrentRoleId(null)
+      setCurrentPersonnelData(null)
+      setCurrentRoleData(null)
+      setSelectedProjectDays(new Set())
+      setApplyToAll(false)
+      setPendingData([])
+      setShowConfirmation(false)
+      onCancel()
+    } catch (error) {
+      console.error('Error adding personnel:', error)
+      // Keep confirmation modal open to allow retry
     }
   }
 
   const handleCancel = () => {
     // Reset form on cancel
-    setPersonnelRows([{
-      id: '1',
-      personnel_id: null,
-      role_id: null,
-      selectedPersonnel: null,
-      selectedRole: null
-    }])
+    setAddedPersonnel([])
+    setCurrentPersonnelId(null)
+    setCurrentRoleId(null)
+    setCurrentPersonnelData(null)
+    setCurrentRoleData(null)
     onCancel()
   }
 
-  const isFormValid = personnelRows.some(row => 
-    row.personnel_id && row.role_id && row.selectedPersonnel && row.selectedRole
-  )
+  const isFormValid = addedPersonnel.length > 0 && selectedProjectDays.size > 0
+  
+  const canAddCurrent = currentPersonnelId && currentRoleId && currentPersonnelData && currentRoleData
 
   // Loading state when personnel/roles data is loading
   if (personnelRolesLoading) {
@@ -190,148 +261,323 @@ const AddPersonnelForm: FC<AddPersonnelFormProps> = ({
         <ModalBody className='overflow-y-auto max-h-[70vh] modal-scrollbar'>
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-blue-600" />
-                <span className="text-lg font-medium text-gray-900">
-                  Add Personnel to Schedule
-                </span>
-              </div>
-              <Button
-                type="button"
-                onClick={addNewRow}
-                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 transform hover:scale-105 transition-all duration-200 shadow-md hover:shadow-lg"
-              >
-                <Plus className="h-4 w-4" />
-                Add Row
-              </Button>
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-blue-600" />
+              <span className="text-lg font-medium text-gray-900">
+                Add Personnel to Schedule
+              </span>
             </div>
 
-            {/* Personnel Grid */}
-            <div className="space-y-6">
-              {personnelRows.map((row, index) => (
-                <div
-                  key={row.id}
-                  className="grid grid-cols-12 gap-6 p-6 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors duration-200"
-                >
-                  {/* Row Number */}
-                  <div className="col-span-1 flex items-center justify-center">
-                    <span className="flex items-center justify-center w-10 h-10 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
-                      {index + 1}
-                    </span>
+            {/* Added Personnel List */}
+            {addedPersonnel.length > 0 && (
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200 p-4 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <UserCheck className="h-5 w-5 text-blue-600" />
+                    <h3 className="text-sm font-semibold text-gray-800">
+                      Personnel to Add ({addedPersonnel.length})
+                    </h3>
                   </div>
-
-                  {/* Personnel Selection - Wider for better UX */}
-                  <div className="col-span-5">
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                      Select Personnel
-                    </label>
-                    <PersonnelSelector
-                      value={row.personnel_id}
-                      onChange={(personnelId, personnelData) => handlePersonnelChange(row.id, personnelId, personnelData)}
-                      placeholder="Choose personnel..."
-                      allowCreate={true}
-                      className="min-w-0"
-                    />
-                  </div>
-
-                  {/* Role Selection - Wider for better UX */}
-                  <div className="col-span-5">
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                      Select Role
-                    </label>
-                    <RoleSelector
-                      value={row.role_id}
-                      onChange={(roleId, roleData) => handleRoleChange(row.id, roleId, roleData)}
-                      placeholder="Choose role..."
-                      allowCreate={true}
-                      className="min-w-0"
-                    />
-                  </div>
-
-                  {/* Remove Button */}
-                  <div className="col-span-1 flex items-end justify-center">
-                    {personnelRows.length > 1 && (
-                      <Button
-                        type="button"
-                        onClick={() => removeRow(row.id)}
-                        className="p-3 bg-red-100 hover:bg-red-200 text-red-600 hover:text-red-700 border border-red-200 hover:border-red-300 transform hover:scale-110 transition-all duration-200"
-                      >
-                        <Minus className="h-5 w-5" />
-                      </Button>
-                    )}
-                  </div>
-
-                  {/* Personnel Info Display */}
-                  {row.selectedPersonnel && row.selectedRole && (
-                    <div className="col-span-12 mt-2 p-3 bg-white rounded border border-gray-200">
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-gray-500" />
-                          <span className="text-sm font-medium text-gray-900">
-                            {row.selectedPersonnel.name}
-                          </span>
+                </div>
+                
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {addedPersonnel.map((personnel, index) => (
+                    <div
+                      key={personnel.id}
+                      className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-all duration-200"
+                    >
+                      <div className="flex items-start gap-3">
+                        {/* Number Badge */}
+                        <div className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-semibold">
+                          {index + 1}
                         </div>
-                        <div className="text-sm text-gray-600">
-                          {row.selectedPersonnel.contact_number}
-                        </div>
-                        <div className="text-sm text-blue-600 font-medium">
-                          {row.selectedRole.name}
+
+                        {/* Personnel Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <User className="h-4 w-4 text-gray-500 flex-shrink-0" />
+                                <span className="text-sm font-semibold text-gray-900 truncate">
+                                  {personnel.personnel_name}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <Phone className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                                <span className="text-xs text-gray-600">
+                                  {personnel.contact_number}
+                                </span>
+                              </div>
+                              
+                              {/* Role Section */}
+                              <div className="flex items-center gap-2">
+                                <Briefcase className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+                                {personnel.isEditing ? (
+                                  <div className="flex-1">
+                                    <RoleSelector
+                                      value={personnel.role_id}
+                                      onChange={(roleId, roleData) => handleUpdateRole(personnel.id, roleId, roleData)}
+                                      placeholder="Select role..."
+                                      allowCreate={true}
+                                      className="text-xs"
+                                    />
+                                  </div>
+                                ) : (
+                                  <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2 py-1 rounded">
+                                    {personnel.role_name}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleEdit(personnel.id)}
+                                className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md transition-colors"
+                                title={personnel.isEditing ? "Cancel edit" : "Edit role"}
+                              >
+                                {personnel.isEditing ? (
+                                  <X className="h-4 w-4" />
+                                ) : (
+                                  <Edit2 className="h-4 w-4" />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemovePersonnel(personnel.id)}
+                                className="p-1.5 text-red-600 hover:bg-red-100 rounded-md transition-colors"
+                                title="Remove personnel"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Apply to All Days Toggle */}
-            <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <div className="flex items-center space-x-3">
-                <span className="text-sm font-medium text-gray-700">
-                  Apply to all project days
-                </span>
-                <span className="text-xs text-gray-500">
-                  Add these personnel to every day in the project schedule
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setApplyToAllDays(!applyToAllDays)}
-                className="flex items-center transition-colors duration-200"
-              >
-                {applyToAllDays ? (
-                  <ToggleRight className="h-6 w-6 text-blue-600 hover:text-blue-700" />
-                ) : (
-                  <ToggleLeft className="h-6 w-6 text-gray-400 hover:text-gray-500" />
-                )}
-              </button>
-            </div>
-
-            {/* Summary */}
-            {personnelRows.some(row => row.personnel_id && row.role_id) && (
-              <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                <h4 className="text-sm font-medium text-green-800 mb-2">
-                  Personnel to Add ({personnelRows.filter(row => row.personnel_id && row.role_id).length})
-                </h4>
-                <div className="space-y-1">
-                  {personnelRows
-                    .filter(row => row.personnel_id && row.role_id && row.selectedPersonnel && row.selectedRole)
-                    .map((row, index) => (
-                      <div key={row.id} className="text-xs text-green-700">
-                        {index + 1}. {row.selectedPersonnel.name} - {row.selectedRole.name}
-                      </div>
-                    ))}
+                  ))}
                 </div>
               </div>
             )}
+
+            {/* Input Section */}
+            <div className="bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Users className="h-5 w-5 text-gray-600" />
+                <span className="text-sm font-semibold text-gray-700">
+                  Add New Personnel
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-12 gap-4 items-start">
+                {/* Personnel Selection */}
+                <div className="col-span-5">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Personnel
+                  </label>
+                  <PersonnelSelector
+                    value={currentPersonnelId}
+                    onChange={(personnelId, personnelData) => {
+                      setCurrentPersonnelId(personnelId)
+                      setCurrentPersonnelData(personnelData)
+                    }}
+                    placeholder="Choose personnel..."
+                    allowCreate={true}
+                    className="min-w-0"
+                    excludeIds={getExistingPersonnelIds()}
+                  />
+                </div>
+
+                {/* Role Selection */}
+                <div className="col-span-5">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Role
+                  </label>
+                  <RoleSelector
+                    value={currentRoleId}
+                    onChange={(roleId, roleData) => {
+                      setCurrentRoleId(roleId)
+                      setCurrentRoleData(roleData)
+                    }}
+                    placeholder="Choose role..."
+                    allowCreate={true}
+                    className="min-w-0"
+                  />
+                </div>
+
+                {/* Add Button */}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">
+                    Action
+                  </label>
+                  <Button
+                    type="button"
+                    onClick={handleAddPersonnel}
+                    disabled={!canAddCurrent}
+                    className={`w-full py-2.5 flex items-center justify-center gap-2 transition-all duration-200 ${
+                      canAddCurrent
+                        ? 'bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg transform hover:scale-105'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    <UserCheck className="h-4 w-4" />
+                    Add
+                  </Button>
+                </div>
+              </div>
+
+              {/* Helper Text */}
+              {canAddCurrent && (
+                <div className="mt-3 flex items-center gap-2 text-xs text-gray-600 bg-blue-50 border border-blue-200 rounded-lg p-2">
+                  <Check className="h-3.5 w-3.5 text-green-600" />
+                  <span>
+                    Ready to add <span className="font-semibold">{currentPersonnelData?.name}</span> as{' '}
+                    <span className="font-semibold">{currentRoleData?.name}</span>
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Project Days Selection */}
+            <div className="border-t border-gray-200 pt-4">
+              <div className="space-y-4">
+                {/* Header with "Apply to All" checkbox */}
+                <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center space-x-3">
+                    <Calendar className="h-5 w-5 text-blue-600" />
+                    <div>
+                      <span className="text-sm font-semibold text-gray-800 block">
+                        Select Project Days
+                      </span>
+                      <span className="text-xs text-gray-600">
+                        Choose which days to add these personnel to
+                      </span>
+                    </div>
+                  </div>
+                  <label className="flex items-center space-x-3 cursor-pointer group">
+                    <span className="text-sm font-medium text-gray-700 group-hover:text-blue-600 transition-colors">
+                      Apply to all days
+                    </span>
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={applyToAll}
+                        onChange={toggleApplyToAll}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Individual Day Checkboxes */}
+                <div className="grid grid-cols-1 gap-2 max-h-64 overflow-y-auto p-2 bg-gray-50 rounded-lg border border-gray-200">
+                  {projectDays.map((day, index) => {
+                    const dayDate = new Date(day.project_date)
+                    const isSelected = selectedProjectDays.has(day.id)
+                    const isPastDate = dayDate < new Date(new Date().setHours(0, 0, 0, 0))
+                    
+                    return (
+                      <label
+                        key={day.id}
+                        className={`flex items-center justify-between p-3 rounded-lg border transition-all duration-200 cursor-pointer ${
+                          isSelected
+                            ? 'bg-blue-50 border-blue-300 shadow-sm'
+                            : 'bg-white border-gray-200 hover:bg-gray-50'
+                        } ${isPastDate ? 'opacity-60' : ''}`}
+                      >
+                        <div className="flex items-center space-x-3 flex-1">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleDaySelection(day.id)}
+                            className="w-5 h-5 text-blue-600 bg-white border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-sm font-medium ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}>
+                                Day {index + 1}
+                              </span>
+                              {isPastDate && (
+                                <span className="text-xs px-2 py-0.5 bg-gray-200 text-gray-600 rounded-full">
+                                  Past
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-xs text-gray-600">
+                              {dayDate.toLocaleDateString('en-US', {
+                                weekday: 'short',
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric'
+                              })}
+                            </span>
+                          </div>
+                          {day.location_name && (
+                            <span className="text-xs text-gray-500 truncate max-w-[150px]">
+                              {day.location_name}
+                            </span>
+                          )}
+                        </div>
+                        {isSelected && (
+                          <Check className="h-5 w-5 text-blue-600 ml-2 flex-shrink-0" />
+                        )}
+                      </label>
+                    )
+                  })}
+                </div>
+
+                {/* Selection Summary */}
+                <div className="flex items-center justify-between text-sm px-2">
+                  <span className="text-gray-600">
+                    {selectedProjectDays.size === 0 
+                      ? 'No days selected'
+                      : `${selectedProjectDays.size} of ${projectDays.length} days selected`
+                    }
+                  </span>
+                  {selectedProjectDays.size > 0 && selectedProjectDays.size < projectDays.length && (
+                    <button
+                      type="button"
+                      onClick={toggleApplyToAll}
+                      className="text-blue-600 hover:text-blue-700 font-medium transition-colors"
+                    >
+                      Select all
+                    </button>
+                  )}
+                  {selectedProjectDays.size === projectDays.length && projectDays.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={toggleApplyToAll}
+                      className="text-red-600 hover:text-red-700 font-medium transition-colors"
+                    >
+                      Deselect all
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
           </form>
         </ModalBody>
 
         <ModalFooter>
           <div className="flex justify-between items-center w-full">
-            <div className="text-sm text-gray-500">
-              {personnelRows.filter(row => row.personnel_id && row.role_id).length} personnel ready to add
+            <div className="flex items-center gap-2">
+              {addedPersonnel.length > 0 ? (
+                <>
+                  <div className="flex items-center justify-center w-8 h-8 bg-green-100 rounded-full">
+                    <Check className="h-4 w-4 text-green-600" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-700">
+                    {addedPersonnel.length} personnel ready to add
+                  </span>
+                </>
+              ) : (
+                <span className="text-sm text-gray-500">
+                  Add personnel to continue
+                </span>
+              )}
             </div>
             <div className="flex gap-2">
               <Button 
@@ -355,7 +601,7 @@ const AddPersonnelForm: FC<AddPersonnelFormProps> = ({
                     Adding...
                   </>
                 ) : (
-                  <>Add {personnelRows.filter(row => row.personnel_id && row.role_id).length} Personnel</>
+                  <>Add {addedPersonnel.length} Personnel</>
                 )}
               </Button>
             </div>
@@ -367,7 +613,7 @@ const AddPersonnelForm: FC<AddPersonnelFormProps> = ({
       <ConfirmationModal
         isOpen={showConfirmation}
         title="Confirm Add Personnel"
-        message={`Are you sure you want to add ${pendingData.length} personnel to the project${applyToAllDays ? ' for all days' : ''}?`}
+        message={`Are you sure you want to add ${pendingData.length} personnel to ${selectedProjectDays.size} project day(s)?`}
         onConfirm={handleConfirmedAdd}
         onClose={() => {
           setShowConfirmation(false)

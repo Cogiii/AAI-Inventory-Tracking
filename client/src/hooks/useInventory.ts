@@ -157,8 +157,19 @@ export const useAddProjectItems = () => {
     mutationFn: inventoryAPI.addProjectItems,
     onSuccess: () => {
       // Invalidate project details since we're adding items to projects
-      queryClient.invalidateQueries({ queryKey: ['project-detail'] });
-      queryClient.invalidateQueries({ queryKey: inventoryKeys.stats() });
+      queryClient.invalidateQueries({ 
+        queryKey: ['project-detail'],
+        exact: false
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: inventoryKeys.stats(),
+        exact: false
+      });
+      // Also invalidate inventory lists to update available quantities
+      queryClient.invalidateQueries({ 
+        queryKey: inventoryKeys.lists(),
+        exact: false
+      });
     },
     onError: (error: any) => {
       console.error('Failed to add project items:', error);
