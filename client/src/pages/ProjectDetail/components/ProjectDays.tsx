@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import type { FC } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ConfirmationModal } from '@/components/ui'
 import { Calendar, MapPin, Clock, Plus, Edit, Trash2, Loader2, AlertCircle } from 'lucide-react'
 import AddDayForm from '../modals/AddDayForm'
 import EditDayForm from '../modals/EditDayForm'
+import DeleteDayModal from '../modals/DeleteDayModal'
 import { useProjectDetail, useDeleteProjectDay } from '@/hooks/useProjectDetail'
 
 interface ProjectDaysProps {
@@ -101,12 +101,13 @@ const ProjectDays: FC<ProjectDaysProps> = ({ joNumber }) => {
     })
   }
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = async (forceDelete: boolean) => {
     if (deleteConfirmation.day && joNumber) {
       try {
         await deleteProjectDayMutation.mutateAsync({
           joNumber,
-          id: deleteConfirmation.day.id
+          id: deleteConfirmation.day.id,
+          force: forceDelete
         })
         setDeleteConfirmation({ isOpen: false, day: null })
       } catch (error) {
@@ -245,19 +246,12 @@ const ProjectDays: FC<ProjectDaysProps> = ({ joNumber }) => {
         />
 
         {/* Delete Confirmation Modal */}
-        <ConfirmationModal
+        <DeleteDayModal
           isOpen={deleteConfirmation.isOpen}
-          type="delete"
-          title="Delete Project Day"
-          message={`Are you sure you want to delete this project day scheduled for ${deleteConfirmation.day?.project_date ? new Date(deleteConfirmation.day.project_date).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            weekday: 'long'
-          }) : 'the selected date'}? This action cannot be undone.`}
+          day={deleteConfirmation.day}
           onConfirm={handleConfirmDelete}
           onClose={() => setDeleteConfirmation({ isOpen: false, day: null })}
-          confirmText={deleteProjectDayMutation.isPending ? "Deleting..." : "Delete"}
+          isDeleting={deleteProjectDayMutation.isPending}
         />
       </CardContent>
     </Card>

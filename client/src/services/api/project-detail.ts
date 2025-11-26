@@ -206,8 +206,10 @@ export const projectDetailMutationAPI = {
   deleteProjectDay: async (data: {
     joNumber: string;
     id: number;
+    force?: boolean;
   }) => {
-    const response = await api.delete(`/project-detail/project-days/${data.id}`);
+    const url = `/project-detail/project-days/${data.id}${data.force ? '?force=true' : ''}`;
+    const response = await api.delete(url);
     return response.data;
   },
 

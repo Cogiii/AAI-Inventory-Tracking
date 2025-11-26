@@ -724,10 +724,11 @@ router.put('/project-days/:id', async (req, res) => {
 
 /**
  * DELETE /api/project-detail/project-days/:id
- * Delete project day
+ * Delete project day (supports force delete with ?force=true)
  */
 router.delete('/project-days/:id', async (req, res) => {
   const { id } = req.params;
+  const { force } = req.query; // Check for force parameter
   
   try {
     // Check if project day has associated items or personnel
@@ -737,7 +738,11 @@ router.delete('/project-days/:id', async (req, res) => {
     const [itemsResult] = await pool.execute(checkItemsQuery, [id]);
     const [personnelResult] = await pool.execute(checkPersonnelQuery, [id]);
     
-    if (itemsResult[0].count > 0 || personnelResult[0].count > 0) {
+    const hasItems = itemsResult[0].count > 0;
+    const hasPersonnel = personnelResult[0].count > 0;
+    
+    // If force is not enabled and has associations, return error
+    if (!force && (hasItems || hasPersonnel)) {
       return res.status(400).json({
         success: false,
         message: 'Cannot delete project day with associated items or personnel'
@@ -762,6 +767,19 @@ router.delete('/project-days/:id', async (req, res) => {
 
     const projectDayData = projectDayResult[0];
 
+    // If force delete, cascade delete associated items and personnel
+    if (force && (hasItems || hasPersonnel)) {
+      // Delete associated project items (will trigger inventory restoration)
+      if (hasItems) {
+        await pool.execute('DELETE FROM project_item WHERE project_day_id = ?', [id]);
+      }
+      
+      // Delete associated project personnel
+      if (hasPersonnel) {
+        await pool.execute('DELETE FROM project_personnel WHERE project_day_id = ?', [id]);
+      }
+    }
+
     // Delete project day
     const deleteQuery = 'DELETE FROM project_day WHERE id = ?';
     const [result] = await pool.execute(deleteQuery, [id]);
@@ -776,7 +794,9 @@ router.delete('/project-days/:id', async (req, res) => {
       month: 'long', 
       day: 'numeric' 
     });
-    const logDescription = `Project day deleted: ${formattedDate}${projectDayData.location_name ? ` at ${projectDayData.location_name}` : ''}`;
+    const logDescription = force && (hasItems || hasPersonnel)
+      ? `Project day deleted (forced): ${formattedDate}${projectDayData.location_name ? ` at ${projectDayData.location_name}` : ''} with ${itemsResult[0].count} item(s) and ${personnelResult[0].count} personnel`
+      : `Project day deleted: ${formattedDate}${projectDayData.location_name ? ` at ${projectDayData.location_name}` : ''}`;
     await pool.execute(logQuery, [projectDayData.project_id, logDescription, req.user?.id || null]);
     
     res.json({
@@ -893,9 +913,7 @@ router.post('/project-items', auth, async (req, res) => {
             
             const [insertResult] = await pool.execute(insertQuery, [dayId, item_id, allocated_quantity, status]);
             
-            // Update item available quantity
-            const updateItemQuery = 'UPDATE item SET available_quantity = available_quantity - ? WHERE id = ?';
-            await pool.execute(updateItemQuery, [allocated_quantity, item_id]);
+            // Note: Database trigger automatically handles inventory adjustment
             
             results.push({
               id: insertResult.insertId,
@@ -922,9 +940,7 @@ router.post('/project-items', auth, async (req, res) => {
             
             await pool.execute(updateQuery, [newQuantity, dayId, item_id]);
             
-            // Update item available quantity
-            const updateItemQuery = 'UPDATE item SET available_quantity = available_quantity - ? WHERE id = ?';
-            await pool.execute(updateItemQuery, [allocated_quantity, item_id]);
+            // Note: Database trigger automatically handles inventory adjustment
             
             results.push({
               project_day_id: dayId,
@@ -1056,18 +1072,8 @@ router.put('/project-items/:id', auth, async (req, res) => {
       allocated_quantity, damaged_quantity, lost_quantity, returned_quantity, status, id
     ]);
     
-    // Update item inventory if allocated quantity changed
-    if (allocatedDiff !== 0) {
-      const updateItemQuery = 'UPDATE item SET available_quantity = available_quantity - ? WHERE id = ?';
-      await pool.execute(updateItemQuery, [allocatedDiff, currentItem.item_id]);
-    }
-    
-    // If items are returned, add back to inventory
-    const returnedDiff = (returned_quantity || currentItem.returned_quantity) - currentItem.returned_quantity;
-    if (returnedDiff > 0) {
-      const updateReturnQuery = 'UPDATE item SET available_quantity = available_quantity + ? WHERE id = ?';
-      await pool.execute(updateReturnQuery, [returnedDiff, currentItem.item_id]);
-    }
+    // Note: Database trigger automatically handles all inventory adjustments
+    // including allocated_quantity changes, returned_quantity, damaged_quantity, and lost_quantity
 
     // Log the project item update activity
     const changes = [];
@@ -1154,9 +1160,7 @@ router.delete('/project-items/:id', auth, async (req, res) => {
     const deleteQuery = 'DELETE FROM project_item WHERE id = ?';
     await pool.execute(deleteQuery, [id]);
     
-    // Return allocated quantity back to inventory
-    const updateItemQuery = 'UPDATE item SET available_quantity = available_quantity + ? WHERE id = ?';
-    await pool.execute(updateItemQuery, [allocated_quantity, item_id]);
+    // Note: Database trigger automatically restores quantities to inventory
 
     // Log the project item deletion activity
     const logQuery = `

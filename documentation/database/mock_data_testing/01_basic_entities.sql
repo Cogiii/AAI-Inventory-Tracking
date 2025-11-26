@@ -128,9 +128,9 @@ INSERT INTO personnel (name, contact_number, is_active) VALUES
 INSERT INTO location (name, type, street, barangay, city, province, region, postal_code, country, is_active) VALUES
 ('Main Warehouse', 'warehouse', '123 Diversion Road', 'Ma-a', 'Davao City', 'Davao del Sur', 'Region XI', '8000', 'Philippines', TRUE),
 ('Marketing Storage Hub', 'warehouse', '45 Lanang Blvd', 'Lanang', 'Davao City', 'Davao del Sur', 'Region XI', '8000', 'Philippines', TRUE),
-('SM Lanang Premiere Booth', 'project_site', 'J.P. Laurel Ave', 'Lanang', 'Davao City', 'Davao del Sur', 'Region XI', '8000', 'Philippines', TRUE),
-('Abreeza Mall Exhibit', 'project_site', 'J.P. Laurel Ave', 'Bajada', 'Davao City', 'Davao del Sur', 'Region XI', '8000', 'Philippines', TRUE),
-('Gaisano Mall Product Fair', 'project_site', 'J.P. Laurel Ave', 'Bajada', 'Davao City', 'Davao del Sur', 'Region XI', '8000', 'Philippines', TRUE),
+('SM Lanang', 'project_site', 'J.P. Laurel Ave', 'Lanang', 'Davao City', 'Davao del Sur', 'Region XI', '8000', 'Philippines', TRUE),
+('Abreeza Mall', 'project_site', 'J.P. Laurel Ave', 'Bajada', 'Davao City', 'Davao del Sur', 'Region XI', '8000', 'Philippines', TRUE),
+('Gaisano Mall', 'project_site', 'J.P. Laurel Ave', 'Bajada', 'Davao City', 'Davao del Sur', 'Region XI', '8000', 'Philippines', TRUE),
 ('Tagum City Pavilion', 'project_site', 'Pioneer Ave', 'Magugpo', 'Tagum City', 'Davao del Norte', 'Region XI', '8100', 'Philippines', TRUE),
 ('General Santos City Trade Hall', 'project_site', 'Santiago Blvd', 'Lagao', 'General Santos City', 'South Cotabato', 'Region XII', '9500', 'Philippines', TRUE),
 ('Cagayan de Oro Exhibit Center', 'project_site', 'Limketkai Drive', 'Lapasan', 'Cagayan de Oro City', 'Misamis Oriental', 'Region X', '9000', 'Philippines', TRUE),

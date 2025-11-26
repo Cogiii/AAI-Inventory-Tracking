@@ -125,6 +125,14 @@ export const useDeleteProjectDay = () => {
       queryClient.invalidateQueries({ 
         queryKey: PROJECT_DETAIL_KEYS.detail(joNumber) 
       });
+      // Invalidate available items for this project
+      queryClient.invalidateQueries({ 
+        queryKey: PROJECT_DETAIL_KEYS.availableItems(joNumber) 
+      });
+      // Invalidate all inventory queries since items are restored to inventory
+      queryClient.invalidateQueries({ 
+        queryKey: ['inventory'] 
+      });
     },
   });
 };
@@ -143,6 +151,10 @@ export const useAddProjectItems = () => {
       queryClient.invalidateQueries({ 
         queryKey: PROJECT_DETAIL_KEYS.availableItems(joNumber) 
       });
+      // Also invalidate inventory queries to update stock everywhere
+      queryClient.invalidateQueries({ 
+        queryKey: ['inventory'] 
+      });
     },
   });
 };
@@ -153,10 +165,17 @@ export const useUpdateProjectItem = () => {
   return useMutation({
     mutationFn: projectDetailMutationAPI.updateProjectItem,
     onSuccess: (_, variables) => {
-      // Invalidate project detail data
+      // Invalidate project detail and available items data
       const joNumber = variables.joNumber;
       queryClient.invalidateQueries({ 
         queryKey: PROJECT_DETAIL_KEYS.detail(joNumber) 
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: PROJECT_DETAIL_KEYS.availableItems(joNumber) 
+      });
+      // Also invalidate inventory queries to update stock everywhere
+      queryClient.invalidateQueries({ 
+        queryKey: ['inventory'] 
       });
     },
   });
@@ -175,6 +194,10 @@ export const useDeleteProjectItem = () => {
       });
       queryClient.invalidateQueries({ 
         queryKey: PROJECT_DETAIL_KEYS.availableItems(joNumber) 
+      });
+      // Also invalidate inventory queries to update stock everywhere
+      queryClient.invalidateQueries({ 
+        queryKey: ['inventory'] 
       });
     },
   });

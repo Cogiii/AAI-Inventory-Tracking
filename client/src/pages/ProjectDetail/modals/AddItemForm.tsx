@@ -1,9 +1,9 @@
-﻿import { useState } from 'react'
+﻿import { useState, useEffect } from 'react'
 import type { FC, FormEvent } from 'react'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { ConfirmationModal, ItemSelector } from '@/components/ui'
-import { ToggleLeft, ToggleRight, Plus, Minus, Package, Loader2, AlertTriangle } from 'lucide-react'
+import { Plus, Minus, Package, Loader2, AlertTriangle, Calendar, Check } from 'lucide-react'
 import { useAddProjectItems } from '@/hooks/useInventory'
 
 interface AddItemFormProps {
@@ -47,6 +47,59 @@ const AddItemForm: FC<AddItemFormProps> = ({
   ])
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [pendingData, setPendingData] = useState<any[]>([])
+  
+  // State for selected project days
+  const [selectedProjectDays, setSelectedProjectDays] = useState<Set<number>>(new Set())
+  const [applyToAll, setApplyToAll] = useState(false)
+
+  // Initialize selected days when modal opens
+  useEffect(() => {
+    if (isOpen && projectDays.length > 0) {
+      if (applyToAllDays) {
+        // If coming from "apply to all days", select all
+        setSelectedProjectDays(new Set(projectDays.map(day => day.id)))
+        setApplyToAll(true)
+      } else if (selectedDay !== 'all' && typeof selectedDay === 'number') {
+        // If a specific day was selected, only select that one
+        setSelectedProjectDays(new Set([selectedDay]))
+        setApplyToAll(false)
+      } else {
+        // Default: select all days
+        setSelectedProjectDays(new Set(projectDays.map(day => day.id)))
+        setApplyToAll(true)
+      }
+    }
+  }, [isOpen, projectDays, selectedDay, applyToAllDays])
+
+  // Toggle individual day selection
+  const toggleDaySelection = (dayId: number) => {
+    setSelectedProjectDays(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(dayId)) {
+        newSet.delete(dayId)
+      } else {
+        newSet.add(dayId)
+      }
+      
+      // Update "apply to all" based on selection
+      setApplyToAll(newSet.size === projectDays.length)
+      
+      return newSet
+    })
+  }
+
+  // Toggle apply to all days
+  const toggleApplyToAll = () => {
+    if (applyToAll) {
+      // Uncheck all
+      setSelectedProjectDays(new Set())
+      setApplyToAll(false)
+    } else {
+      // Check all
+      setSelectedProjectDays(new Set(projectDays.map(day => day.id)))
+      setApplyToAll(true)
+    }
+  }
 
   const addNewRow = () => {
     const newRow: ItemRow = {
@@ -108,18 +161,12 @@ const AddItemForm: FC<AddItemFormProps> = ({
   }
 
   const handleConfirmedAdd = async () => {
-    if (pendingData.length === 0) return
+    if (pendingData.length === 0 || selectedProjectDays.size === 0) return
 
     try {
-      const targetProjectDayIds = applyToAllDays 
-        ? projectDays.map(day => day.id)
-        : selectedDay === 'all' 
-          ? projectDays.map(day => day.id)
-          : [selectedDay as number]
-
       await addProjectItemsMutation.mutateAsync({
         joNumber,
-        project_day_ids: targetProjectDayIds,
+        project_day_ids: Array.from(selectedProjectDays),
         item_assignments: pendingData
       })
       
@@ -132,6 +179,8 @@ const AddItemForm: FC<AddItemFormProps> = ({
         availableQuantity: 0,
         quantityError: ''
       }])
+      setSelectedProjectDays(new Set())
+      setApplyToAll(false)
       setPendingData([])
       setShowConfirmation(false)
       onCancel()
@@ -158,12 +207,13 @@ const AddItemForm: FC<AddItemFormProps> = ({
     return item ? item.name : ''
   }
 
-  const isFormValid = itemRows.some(row => 
-    row.item_id && 
-    row.allocated_quantity > 0 && 
-    !row.quantityError &&
-    row.selectedItem
-  )
+  const isFormValid = 
+    itemRows.some(row => 
+      row.item_id && 
+      row.allocated_quantity > 0 && 
+      !row.quantityError &&
+      row.selectedItem
+    ) && selectedProjectDays.size > 0
 
   return (
     <>
@@ -283,26 +333,122 @@ const AddItemForm: FC<AddItemFormProps> = ({
             </div>
 
             {/* Apply to All Days Toggle */}
-            <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <div className="flex items-center space-x-3">
-                <span className="text-sm font-medium text-gray-700">
-                  Apply to all project days
-                </span>
-                <span className="text-xs text-gray-500">
-                  Add these items to every day in the project schedule
-                </span>
+            <div className="border-t border-gray-200 pt-4">
+              <div className="space-y-4">
+                {/* Header with "Apply to All" checkbox */}
+                <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center space-x-3">
+                    <Calendar className="h-5 w-5 text-blue-600" />
+                    <div>
+                      <span className="text-sm font-semibold text-gray-800 block">
+                        Select Project Days
+                      </span>
+                      <span className="text-xs text-gray-600">
+                        Choose which days to add these items to
+                      </span>
+                    </div>
+                  </div>
+                  <label className="flex items-center space-x-3 cursor-pointer group">
+                    <span className="text-sm font-medium text-gray-700 group-hover:text-blue-600 transition-colors">
+                      Apply to all days
+                    </span>
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={applyToAll}
+                        onChange={toggleApplyToAll}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Individual Day Checkboxes */}
+                <div className="grid grid-cols-1 gap-2 max-h-64 overflow-y-auto p-2 bg-gray-50 rounded-lg border border-gray-200">
+                  {projectDays.map((day, index) => {
+                    const dayDate = new Date(day.project_date)
+                    const isSelected = selectedProjectDays.has(day.id)
+                    const isPastDate = dayDate < new Date(new Date().setHours(0, 0, 0, 0))
+                    
+                    return (
+                      <label
+                        key={day.id}
+                        className={`flex items-center justify-between p-3 rounded-lg border transition-all duration-200 cursor-pointer ${
+                          isSelected
+                            ? 'bg-blue-50 border-blue-300 shadow-sm'
+                            : 'bg-white border-gray-200 hover:bg-gray-50'
+                        } ${isPastDate ? 'opacity-60' : ''}`}
+                      >
+                        <div className="flex items-center space-x-3 flex-1">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleDaySelection(day.id)}
+                            className="w-5 h-5 text-blue-600 bg-white border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-sm font-medium ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}>
+                                Day {index + 1}
+                              </span>
+                              {isPastDate && (
+                                <span className="text-xs px-2 py-0.5 bg-gray-200 text-gray-600 rounded-full">
+                                  Past
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-xs text-gray-600">
+                              {dayDate.toLocaleDateString('en-US', {
+                                weekday: 'short',
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric'
+                              })}
+                            </span>
+                          </div>
+                          {day.location_name && (
+                            <span className="text-xs text-gray-500 truncate max-w-[150px]">
+                              {day.location_name}
+                            </span>
+                          )}
+                        </div>
+                        {isSelected && (
+                          <Check className="h-5 w-5 text-blue-600 ml-2 flex-shrink-0" />
+                        )}
+                      </label>
+                    )
+                  })}
+                </div>
+
+                {/* Selection Summary */}
+                <div className="flex items-center justify-between text-sm px-2">
+                  <span className="text-gray-600">
+                    {selectedProjectDays.size === 0 
+                      ? 'No days selected'
+                      : `${selectedProjectDays.size} of ${projectDays.length} days selected`
+                    }
+                  </span>
+                  {selectedProjectDays.size > 0 && selectedProjectDays.size < projectDays.length && (
+                    <button
+                      type="button"
+                      onClick={toggleApplyToAll}
+                      className="text-blue-600 hover:text-blue-700 font-medium transition-colors"
+                    >
+                      Select all
+                    </button>
+                  )}
+                  {selectedProjectDays.size === projectDays.length && projectDays.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={toggleApplyToAll}
+                      className="text-red-600 hover:text-red-700 font-medium transition-colors"
+                    >
+                      Deselect all
+                    </button>
+                  )}
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setApplyToAllDays(!applyToAllDays)}
-                className="flex items-center transition-colors duration-200"
-              >
-                {applyToAllDays ? (
-                  <ToggleRight className="h-6 w-6 text-blue-600 hover:text-blue-700" />
-                ) : (
-                  <ToggleLeft className="h-6 w-6 text-gray-400 hover:text-gray-500" />
-                )}
-              </button>
             </div>
 
             {/* Summary */}
@@ -327,8 +473,9 @@ const AddItemForm: FC<AddItemFormProps> = ({
 
         <ModalFooter>
           <div className="flex justify-between items-center w-full">
-            <div className="text-sm text-gray-500">
-              {itemRows.filter(row => row.item_id && row.allocated_quantity > 0 && !row.quantityError).length} item(s) ready to add
+            <div className="text-sm text-gray-600">
+              <span className="font-medium">{itemRows.filter(row => row.item_id && row.allocated_quantity > 0 && !row.quantityError).length}</span> item(s) • 
+              <span className="font-medium ml-1">{selectedProjectDays.size}</span> day(s) selected
             </div>
             <div className="flex gap-2">
               <Button 
@@ -353,7 +500,7 @@ const AddItemForm: FC<AddItemFormProps> = ({
                     Adding...
                   </>
                 ) : (
-                  `Add ${itemRows.filter(row => row.item_id && row.allocated_quantity > 0 && !row.quantityError).length} Item(s)`
+                  `Add to ${selectedProjectDays.size} Day(s)`
                 )}
               </Button>
             </div>
@@ -365,7 +512,20 @@ const AddItemForm: FC<AddItemFormProps> = ({
       <ConfirmationModal
         isOpen={showConfirmation}
         title="Confirm Add Items"
-        message={`Are you sure you want to add ${pendingData.length} item(s) to the project${applyToAllDays ? ' for all days' : ''}?`}
+        message={
+          <div className="space-y-2">
+            <p>
+              Are you sure you want to add <strong>{pendingData.length} item(s)</strong> to <strong>{selectedProjectDays.size} project day(s)</strong>?
+            </p>
+            <div className="text-sm text-gray-600 mt-2">
+              {selectedProjectDays.size === projectDays.length ? (
+                <p className="text-blue-600">✓ Items will be added to all project days</p>
+              ) : (
+                <p>Items will be added to the selected days only</p>
+              )}
+            </div>
+          </div>
+        }
         onConfirm={handleConfirmedAdd}
         onClose={() => {
           setShowConfirmation(false)

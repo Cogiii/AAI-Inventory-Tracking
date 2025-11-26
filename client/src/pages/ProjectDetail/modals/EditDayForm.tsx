@@ -7,8 +7,7 @@ import { Button } from '@/components/ui/button'
 import { ConfirmationModal } from '@/components/ui'
 import LocationSelector from '@/components/ui/location-selector'
 import { Calendar, Loader2 } from 'lucide-react'
-import { getLocations } from '@/utils/projectData'
-import { useUpdateProjectDay } from '@/hooks/useProjectDetail'
+import { useUpdateProjectDay, useLocations } from '@/hooks/useProjectDetail'
 import { UpdateProjectDaySchema, type UpdateProjectDayData } from '@/schemas/project-detail'
 
 interface EditDayFormProps {
@@ -25,6 +24,7 @@ const EditDayForm: FC<EditDayFormProps> = ({
   onCancel
 }) => {
   const updateProjectDayMutation = useUpdateProjectDay()
+  const { data: locationsData } = useLocations()
   
   const {
     register,
@@ -44,9 +44,8 @@ const EditDayForm: FC<EditDayFormProps> = ({
   const watchedValues = watch()
 
   useEffect(() => {
-    if (day) {
-      const locations = getLocations()
-      const location = locations.find(loc => loc.id === day.location_id)
+    if (day && locationsData) {
+      const location = locationsData.find(loc => loc.id === day.location_id)
       
       // Convert ISO date to yyyy-MM-dd format for date input (avoiding timezone issues)
       const formatDateForInput = (dateString: string) => {
@@ -68,7 +67,7 @@ const EditDayForm: FC<EditDayFormProps> = ({
       
       setSelectedLocation(location || null)
     }
-  }, [day, reset])
+  }, [day, locationsData, reset])
 
   const handleFormSubmit = handleSubmit((data) => {
     if (!selectedLocation || !joNumber || !day) return
@@ -155,6 +154,7 @@ const EditDayForm: FC<EditDayFormProps> = ({
                 }}
                 placeholder="Search or select project location..."
                 allowCreate={true}
+                locations={locationsData || []}
               />
               {errors.location_id && (
                 <p className="text-red-500 text-sm mt-1">{errors.location_id.message}</p>

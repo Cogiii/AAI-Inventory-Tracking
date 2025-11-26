@@ -6,8 +6,8 @@ import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { ConfirmationModal } from '@/components/ui'
 import LocationSelector from '@/components/ui/location-selector'
-import { Calendar, ToggleLeft, ToggleRight, Loader2, Plus, X, CalendarDays } from 'lucide-react'
-import { useAddProjectDay, useProjectDetail } from '@/hooks/useProjectDetail'
+import { Calendar, ToggleLeft, ToggleRight, Loader2, Plus, X, CalendarDays, AlertCircle } from 'lucide-react'
+import { useAddProjectDay, useProjectDetail, useLocations } from '@/hooks/useProjectDetail'
 import { AddProjectDaySchema, type AddProjectDayData } from '@/schemas/project-detail'
 
 interface AddDayFormProps {
@@ -23,6 +23,7 @@ const AddDayForm: FC<AddDayFormProps> = ({
 }) => {
   const addProjectDayMutation = useAddProjectDay()
   const { data: projectData } = useProjectDetail(joNumber)
+  const { data: locationsData } = useLocations()
   
   const {
     register,
@@ -46,6 +47,17 @@ const AddDayForm: FC<AddDayFormProps> = ({
   const [pendingData, setPendingData] = useState<AddProjectDayData[]>([])
 
   const watchedValues = watch()
+
+  // Get existing project days dates
+  const existingDates = projectData?.project_days?.map(day => {
+    const date = new Date(day.project_date)
+    return date.toISOString().split('T')[0]
+  }) || []
+
+  // Helper function to check if date is already added
+  const isDateAlreadyAdded = (dateString: string) => {
+    return existingDates.includes(dateString)
+  }
 
   // Helper functions for managing additional days
   const handleToggleMultipleDays = () => {
@@ -91,20 +103,33 @@ const AddDayForm: FC<AddDayFormProps> = ({
   const handleFormSubmit = handleSubmit((data) => {
     if (!selectedLocation || !joNumber || !projectData) return
 
-    let daysToAdd: AddProjectDayData[] = [data]
+    let daysToAdd: AddProjectDayData[] = []
     
-    // If applying to multiple days, create entries for additional days (filter out empty dates)
+    // Only add the main date if it's not already added
+    if (!isDateAlreadyAdded(data.project_date)) {
+      daysToAdd.push(data)
+    }
+    
+    // If applying to multiple days, create entries for additional days (filter out empty and duplicate dates)
     if (applyToMultipleDays && additionalDays.length > 0) {
-      const validAdditionalDays = additionalDays.filter(date => date.trim() !== '')
+      const validAdditionalDays = additionalDays.filter(date => 
+        date.trim() !== '' && !isDateAlreadyAdded(date)
+      )
       if (validAdditionalDays.length > 0) {
         daysToAdd = [
-          data as AddProjectDayData,
+          ...daysToAdd,
           ...validAdditionalDays.map(date => ({
             ...data,
             project_date: date
           } as AddProjectDayData))
         ]
       }
+    }
+
+    // Show warning if no valid dates to add
+    if (daysToAdd.length === 0) {
+      alert('All selected dates are already added to the project. Please select different dates.')
+      return
     }
 
     setPendingData(daysToAdd)
@@ -172,6 +197,12 @@ const AddDayForm: FC<AddDayFormProps> = ({
               {errors.project_date && (
                 <p className="text-red-500 text-sm mt-1">{errors.project_date.message}</p>
               )}
+              {watchedValues.project_date && isDateAlreadyAdded(watchedValues.project_date) && (
+                <p className="text-amber-600 text-sm mt-1 flex items-center gap-1">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  This date is already added to the project
+                </p>
+              )}
             </div>
 
             {/* Location */}
@@ -187,6 +218,7 @@ const AddDayForm: FC<AddDayFormProps> = ({
                 }}
                 placeholder="Search or select project location..."
                 allowCreate={true}
+                locations={locationsData || []}
               />
               {errors.location_id && (
                 <p className="text-red-500 text-sm mt-1">{errors.location_id.message}</p>
@@ -250,28 +282,40 @@ const AddDayForm: FC<AddDayFormProps> = ({
                   <div className="max-h-32 overflow-y-auto pr-2 compact-scrollbar">
                     <div className="space-y-2">
                       {additionalDays.map((date, index) => (
-                        <div key={index} className="flex items-center gap-2 group">
-                          <div className="flex-1 relative">
-                            <input
-                              type="date"
-                              value={date}
-                              min={getTomorrowDate()}
-                              onChange={(e) => handleDayChange(index, e.target.value)}
-                              className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition-all duration-200"
-                              placeholder={`Date ${index + 1}`}
-                            />
-                            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-gray-400 pointer-events-none">
-                              {index + 1}
+                        <div key={index} className="space-y-1">
+                          <div className="flex items-center gap-2 group">
+                            <div className="flex-1 relative">
+                              <input
+                                type="date"
+                                value={date}
+                                min={getTomorrowDate()}
+                                onChange={(e) => handleDayChange(index, e.target.value)}
+                                className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition-all duration-200 ${
+                                  date && isDateAlreadyAdded(date) 
+                                    ? 'border-amber-400 bg-amber-50' 
+                                    : 'border-gray-300'
+                                }`}
+                                placeholder={`Date ${index + 1}`}
+                              />
+                              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-gray-400 pointer-events-none">
+                                {index + 1}
+                              </div>
                             </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveDay(index)}
+                              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-all duration-200 opacity-0 group-hover:opacity-100 hover:scale-110"
+                              title="Remove this date"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveDay(index)}
-                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-all duration-200 opacity-0 group-hover:opacity-100 hover:scale-110"
-                            title="Remove this date"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
+                          {date && isDateAlreadyAdded(date) && (
+                            <p className="text-amber-600 text-xs ml-1 flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3" />
+                              Already added
+                            </p>
+                          )}
                         </div>
                       ))}
                     </div>

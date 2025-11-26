@@ -8,6 +8,7 @@ interface LocationSelectorProps {
   placeholder?: string
   allowCreate?: boolean
   className?: string
+  locations?: any[] // Database locations
 }
 
 const LocationSelector: React.FC<LocationSelectorProps> = ({
@@ -15,7 +16,8 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
   onChange,
   placeholder = "Search or select location...",
   allowCreate = true,
-  className = ""
+  className = "",
+  locations: locationsProp
 }) => {
   const [isOpen, setIsOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -33,7 +35,8 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   
-  const locations = getLocations()
+  // Use provided locations or fallback to hardcoded data
+  const locations = locationsProp || getLocations()
   const selectedLocation = value ? locations.find(l => l.id === value) : null
 
   // Filter locations based on search query
