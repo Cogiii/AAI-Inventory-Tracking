@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
-const { auth } = require('../middleware/auth');
+const { auth, requirePermission } = require('../middleware/auth');
 
 /**
  * @route   GET /api/projects
@@ -73,6 +73,32 @@ router.get('/', auth, async (req, res) => {
       }
     }
 
+    // Auto-update project statuses based on project_day dates
+    const today = new Date().toISOString().split('T')[0];
+
+    // Update 'upcoming' projects to 'ongoing' if they have started
+    await db.query(`
+      UPDATE project p
+      SET p.status = 'ongoing'
+      WHERE p.status = 'upcoming'
+        AND EXISTS (
+          SELECT 1 FROM project_day pd
+          WHERE pd.project_id = p.id AND pd.project_date <= ?
+        )
+    `, [today]);
+
+    // Update 'ongoing' projects to 'completed' if all days are past
+    await db.query(`
+      UPDATE project p
+      SET p.status = 'completed'
+      WHERE p.status = 'ongoing'
+        AND EXISTS (SELECT 1 FROM project_day pd WHERE pd.project_id = p.id)
+        AND NOT EXISTS (
+          SELECT 1 FROM project_day pd
+          WHERE pd.project_id = p.id AND pd.project_date > ?
+        )
+    `, [today]);
+
     // Get total count for pagination
     const countQuery = `
       SELECT COUNT(*) as total
@@ -129,6 +155,62 @@ router.get('/', auth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching projects',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @route   GET /api/projects/next-jo-number
+ * @desc    Generate next JO number based on current year and latest project
+ * @access  Private
+ */
+router.get('/next-jo-number', auth, async (req, res) => {
+  try {
+    const currentYear = new Date().getFullYear();
+    const joPrefix = `JO-${currentYear}-`;
+
+    // Find the latest JO number for the current year
+    const latestQuery = `
+      SELECT jo_number
+      FROM project
+      WHERE jo_number LIKE ?
+      ORDER BY jo_number DESC
+      LIMIT 1
+    `;
+
+    const result = await db.query(latestQuery, [`${joPrefix}%`]);
+
+    let nextNumber = 1;
+
+    if (result.length > 0) {
+      // Extract the number part from the latest JO number (e.g., "JO-2026-005" -> 5)
+      const latestJoNumber = result[0].jo_number;
+      const numberPart = latestJoNumber.replace(joPrefix, '');
+      const currentNumber = parseInt(numberPart, 10);
+
+      if (!isNaN(currentNumber)) {
+        nextNumber = currentNumber + 1;
+      }
+    }
+
+    // Format with leading zeros (e.g., 001, 012, 123)
+    const formattedNumber = nextNumber.toString().padStart(3, '0');
+    const nextJoNumber = `${joPrefix}${formattedNumber}`;
+
+    res.json({
+      success: true,
+      data: {
+        jo_number: nextJoNumber,
+        year: currentYear,
+        sequence: nextNumber
+      }
+    });
+  } catch (error) {
+    console.error('Error generating next JO number:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error generating JO number',
       error: error.message
     });
   }
@@ -301,9 +383,9 @@ router.get('/:id', auth, async (req, res) => {
 /**
  * @route   POST /api/projects
  * @desc    Create new project
- * @access  Private
+ * @access  Private (requires canAddProject permission)
  */
-router.post('/', auth, async (req, res) => {
+router.post('/', auth, requirePermission('canAddProject'), async (req, res) => {
   try {
     const { jo_number, name, description, status = 'upcoming' } = req.body;
     const created_by = req.user.id;
@@ -355,6 +437,12 @@ router.post('/', auth, async (req, res) => {
 
     const newProject = await db.query(newProjectQuery, [projectId]);
 
+    // Log activity for project creation
+    await db.query(`
+      INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
+      VALUES (?, 'created', 'project', ?, ?, NOW())
+    `, [req.user?.id, projectId, `Created project "${name}" (${jo_number})`]);
+
     res.status(201).json({
       success: true,
       message: 'Project created successfully',
@@ -373,9 +461,9 @@ router.post('/', auth, async (req, res) => {
 /**
  * @route   PUT /api/projects/:id
  * @desc    Update project
- * @access  Private
+ * @access  Private (requires canEditProject permission)
  */
-router.put('/:id', auth, async (req, res) => {
+router.put('/:id', auth, requirePermission('canEditProject'), async (req, res) => {
   try {
     const { id } = req.params;
     const { jo_number, name, description, status } = req.body;
@@ -457,6 +545,13 @@ router.put('/:id', auth, async (req, res) => {
 
     const updatedProject = await db.query(updatedProjectQuery, [id]);
 
+    // Log activity for project update
+    const projectName = updatedProject[0]?.project_name || 'Unknown';
+    await db.query(`
+      INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
+      VALUES (?, 'updated', 'project', ?, ?, NOW())
+    `, [req.user?.id, id, `Updated project "${projectName}"`]);
+
     res.json({
       success: true,
       message: 'Project updated successfully',
@@ -475,15 +570,15 @@ router.put('/:id', auth, async (req, res) => {
 /**
  * @route   DELETE /api/projects/:id
  * @desc    Delete project (soft delete by changing status)
- * @access  Private
+ * @access  Private (requires canDeleteProject permission)
  */
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', auth, requirePermission('canDeleteProject'), async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Check if project exists
-    const existingProject = await db.query('SELECT id, status FROM project WHERE id = ?', [id]);
-    
+    // Check if project exists and get name for logging
+    const existingProject = await db.query('SELECT id, name, jo_number, status FROM project WHERE id = ?', [id]);
+
     if (existingProject.length === 0) {
       return res.status(404).json({
         success: false,
@@ -491,11 +586,20 @@ router.delete('/:id', auth, async (req, res) => {
       });
     }
 
+    const projectName = existingProject[0]?.name || 'Unknown';
+    const joNumber = existingProject[0]?.jo_number || '';
+
     // Update project status to cancelled (soft delete)
     await db.query(
       'UPDATE project SET status = ?, updated_at = NOW() WHERE id = ?',
       ['cancelled', id]
     );
+
+    // Log activity for project deletion
+    await db.query(`
+      INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
+      VALUES (?, 'deleted', 'project', ?, ?, NOW())
+    `, [req.user?.id, id, `Cancelled project "${projectName}" (${joNumber})`]);
 
     res.json({
       success: true,

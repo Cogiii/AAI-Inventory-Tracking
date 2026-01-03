@@ -78,6 +78,7 @@ export interface ProjectLog {
   id: number;
   project_id: number;
   project_day_id: number | null;
+  project_date: string | null;
   log_type: 'status_change' | 'activity' | 'incident';
   description: string;
   recorded_by: number | null;
@@ -155,8 +156,17 @@ export const projectDetailAPI = {
 
 // Mutation API functions
 export const projectDetailMutationAPI = {
+  // Create new personnel
+  createPersonnel: async (data: {
+    name: string;
+    contact_number: string;
+  }): Promise<Personnel> => {
+    const response = await api.post('/project-detail/personnel/create', data);
+    return response.data.data;
+  },
+
   // Personnel mutations
-  addPersonnel: async (data: { 
+  addPersonnel: async (data: {
     joNumber: string;
     project_day_ids: number[];
     personnel_assignments: Array<{

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { MapPin, Plus, Search, Check, X, Building, Warehouse, Home } from 'lucide-react'
 import { getLocations } from '@/utils/projectData'
 
@@ -21,7 +22,9 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [isSearching, setIsSearching] = useState(false) // Track if user is actively searching
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 })
   const [newLocation, setNewLocation] = useState({
     name: '',
     type: 'project_site' as 'warehouse' | 'project_site' | 'office',
@@ -34,7 +37,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
 
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
-  
+
   // Use provided locations or fallback to hardcoded data
   const locations = locationsProp || getLocations()
   const selectedLocation = value ? locations.find(l => l.id === value) : null
@@ -42,23 +45,42 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
   // Filter locations based on search query
   const filteredLocations = locations.filter(location => {
     if (!searchQuery) return true
-    
+
     const query = searchQuery.toLowerCase()
     return (
-      location.name.toLowerCase().includes(query) ||
-      location.city.toLowerCase().includes(query) ||
-      location.province.toLowerCase().includes(query) ||
-      location.full_address.toLowerCase().includes(query) ||
-      location.type.toLowerCase().includes(query)
+      (location.name?.toLowerCase() || '').includes(query) ||
+      (location.city?.toLowerCase() || '').includes(query) ||
+      (location.province?.toLowerCase() || '').includes(query) ||
+      (location.full_address?.toLowerCase() || '').includes(query) ||
+      (location.type?.toLowerCase() || '').includes(query)
     )
   })
 
-  // Close dropdown when clicking outside
+  // Calculate dropdown position
+  const updateDropdownPosition = () => {
+    if (inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect()
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width
+      })
+    }
+  }
+
+  // Close dropdown when clicking outside and reset search
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      const target = event.target as Node
+      const isInsideInput = inputRef.current && inputRef.current.contains(target)
+      const isInsideDropdown = dropdownRef.current && dropdownRef.current.contains(target)
+
+      if (!isInsideInput && !isInsideDropdown) {
         setIsOpen(false)
         setShowCreateForm(false)
+        // Reset search state - revert to showing selected location name
+        setSearchQuery('')
+        setIsSearching(false)
       }
     }
 
@@ -66,10 +88,28 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Update position when dropdown opens
+  useEffect(() => {
+    if (isOpen) {
+      updateDropdownPosition()
+
+      // Update position on scroll and resize
+      const handlePositionUpdate = () => updateDropdownPosition()
+      window.addEventListener('scroll', handlePositionUpdate, true)
+      window.addEventListener('resize', handlePositionUpdate)
+
+      return () => {
+        window.removeEventListener('scroll', handlePositionUpdate, true)
+        window.removeEventListener('resize', handlePositionUpdate)
+      }
+    }
+  }, [isOpen])
+
   const handleLocationSelect = (location: any) => {
     onChange(location.id, location)
     setIsOpen(false)
     setSearchQuery('')
+    setIsSearching(false)
   }
 
   const handleCreateLocation = () => {
@@ -120,32 +160,38 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
   }
 
   return (
-    <div className={`relative ${className}`} ref={dropdownRef}>
+    <div className={`relative ${className}`}>
       {/* Input Field */}
       <div className="relative">
         <input
           ref={inputRef}
           type="text"
-          value={selectedLocation ? selectedLocation.name : searchQuery}
+          value={isSearching ? searchQuery : (selectedLocation ? selectedLocation.name : '')}
           onChange={(e) => {
             setSearchQuery(e.target.value)
+            setIsSearching(true)
             setIsOpen(true)
-            if (selectedLocation) {
-              onChange(null) // Clear selection when typing
+          }}
+          onFocus={() => {
+            setIsOpen(true)
+            // If there's a selected location, start searching with empty query to show all options
+            if (selectedLocation && !isSearching) {
+              setSearchQuery('')
+              setIsSearching(true)
             }
           }}
-          onFocus={() => setIsOpen(true)}
           placeholder={placeholder}
           className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-        
-        {selectedLocation && (
+
+        {selectedLocation && !isSearching && (
           <button
             type="button"
             onClick={() => {
               onChange(null)
               setSearchQuery('')
+              setIsSearching(false)
               inputRef.current?.focus()
             }}
             className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full p-1 transition-all duration-200 hover:scale-110"
@@ -159,23 +205,35 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
       {selectedLocation && !isOpen && (
         <div className="mt-2 p-3 bg-gray-50 rounded-lg border">
           <div className="flex items-start gap-2">
-            {getLocationIcon(selectedLocation.type)}
+            {getLocationIcon(selectedLocation.type || '')}
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <span className="font-medium text-gray-900">{selectedLocation.name}</span>
-                <span className={`px-2 py-0.5 text-xs rounded-full ${getTypeColor(selectedLocation.type)}`}>
-                  {selectedLocation.type.replace('_', ' ')}
-                </span>
+                {selectedLocation.type && (
+                  <span className={`px-2 py-0.5 text-xs rounded-full ${getTypeColor(selectedLocation.type)}`}>
+                    {selectedLocation.type.replace('_', ' ')}
+                  </span>
+                )}
               </div>
-              <p className="text-sm text-gray-600">{selectedLocation.full_address}</p>
+              <p className="text-sm text-gray-600">
+                {selectedLocation.full_address || `${selectedLocation.city || ''}${selectedLocation.province ? `, ${selectedLocation.province}` : ''}`}
+              </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Dropdown */}
-      {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-96 overflow-hidden">
+      {/* Dropdown Portal */}
+      {isOpen && createPortal(
+        <div
+          ref={dropdownRef}
+          className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-lg max-h-96 overflow-hidden"
+          style={{
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`,
+            width: `${dropdownPosition.width}px`
+          }}
+        >
           {showCreateForm ? (
             // Create Form
             <div className="p-4 bg-gray-50">
@@ -323,15 +381,19 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
                       className="w-full text-left px-3 py-3 hover:bg-blue-50 hover:shadow-sm border-b border-gray-100 last:border-b-0 focus:bg-blue-50 focus:outline-none transition-all duration-200"
                     >
                       <div className="flex items-start gap-2">
-                        {getLocationIcon(location.type)}
+                        {getLocationIcon(location.type || '')}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="font-medium text-gray-900 truncate">{location.name}</span>
-                            <span className={`px-2 py-0.5 text-xs rounded-full ${getTypeColor(location.type)}`}>
-                              {location.type.replace('_', ' ')}
-                            </span>
+                            {location.type && (
+                              <span className={`px-2 py-0.5 text-xs rounded-full ${getTypeColor(location.type)}`}>
+                                {location.type.replace('_', ' ')}
+                              </span>
+                            )}
                           </div>
-                          <p className="text-sm text-gray-600 truncate">{location.full_address}</p>
+                          <p className="text-sm text-gray-600 truncate">
+                            {location.full_address || `${location.city || ''}${location.province ? `, ${location.province}` : ''}`}
+                          </p>
                         </div>
                         <Check className="h-4 w-4 text-green-600 opacity-0 group-hover:opacity-100" />
                       </div>
@@ -363,7 +425,8 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
               )}
             </>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

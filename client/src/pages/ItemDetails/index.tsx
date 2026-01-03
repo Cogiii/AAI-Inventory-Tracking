@@ -96,6 +96,10 @@ const ItemDetails = () => {
   const [saving, setSaving] = useState(false)
   const [availableLocations, setAvailableLocations] = useState<any[]>([])
 
+  // Discard changes confirmation modal
+  const [discardModalOpen, setDiscardModalOpen] = useState(false)
+  const [pendingCloseModal, setPendingCloseModal] = useState<'edit' | 'quantity' | 'location' | 'issue' | null>(null)
+
   const fetchItem = async () => {
     if (!id) return
     
@@ -156,6 +160,125 @@ const ItemDetails = () => {
     }
   }, [item])
 
+  // Check if edit form has unsaved changes
+  const hasEditChanges = () => {
+    if (!item) return false
+    return (
+      editForm.name !== item.name ||
+      editForm.description !== (item.description || '') ||
+      editForm.type !== item.type ||
+      editForm.status !== (item.status || '')
+    )
+  }
+
+  // Check if quantity form has unsaved changes
+  const hasQuantityChanges = () => {
+    if (!item) return false
+    return quantityForm.delivered_quantity !== item.delivered_quantity
+  }
+
+  // Check if location form has unsaved changes
+  const hasLocationChanges = () => {
+    if (!item) return false
+    return locationForm.warehouse_location_id !== item.warehouse_location_id
+  }
+
+  // Check if issue form has unsaved changes
+  const hasIssueChanges = () => {
+    return issueForm.description.trim() !== '' || issueForm.quantity !== 1
+  }
+
+  // Reset forms to original values
+  const resetEditForm = () => {
+    if (item) {
+      setEditForm({
+        name: item.name,
+        description: item.description || '',
+        type: item.type,
+        brand_id: item.brand_id,
+        warehouse_location_id: item.warehouse_location_id,
+        status: item.status || ''
+      })
+    }
+  }
+
+  const resetQuantityForm = () => {
+    if (item) {
+      setQuantityForm({ delivered_quantity: item.delivered_quantity })
+    }
+  }
+
+  const resetLocationForm = () => {
+    if (item) {
+      setLocationForm({ warehouse_location_id: item.warehouse_location_id })
+    }
+  }
+
+  const resetIssueForm = () => {
+    setIssueForm({ issue_type: 'damage', quantity: 1, description: '' })
+  }
+
+  // Handle modal close with unsaved changes check
+  const handleCloseEditModal = () => {
+    if (hasEditChanges()) {
+      setPendingCloseModal('edit')
+      setDiscardModalOpen(true)
+    } else {
+      setEditModalOpen(false)
+    }
+  }
+
+  const handleCloseQuantityModal = () => {
+    if (hasQuantityChanges()) {
+      setPendingCloseModal('quantity')
+      setDiscardModalOpen(true)
+    } else {
+      setUpdateQuantityModalOpen(false)
+    }
+  }
+
+  const handleCloseLocationModal = () => {
+    if (hasLocationChanges()) {
+      setPendingCloseModal('location')
+      setDiscardModalOpen(true)
+    } else {
+      setMoveLocationModalOpen(false)
+    }
+  }
+
+  const handleCloseIssueModal = () => {
+    if (hasIssueChanges()) {
+      setPendingCloseModal('issue')
+      setDiscardModalOpen(true)
+    } else {
+      setReportIssueModalOpen(false)
+    }
+  }
+
+  // Confirm discard changes
+  const handleDiscardChanges = () => {
+    switch (pendingCloseModal) {
+      case 'edit':
+        resetEditForm()
+        setEditModalOpen(false)
+        break
+      case 'quantity':
+        resetQuantityForm()
+        setUpdateQuantityModalOpen(false)
+        break
+      case 'location':
+        resetLocationForm()
+        setMoveLocationModalOpen(false)
+        break
+      case 'issue':
+        resetIssueForm()
+        setReportIssueModalOpen(false)
+        break
+    }
+    setDiscardModalOpen(false)
+    setPendingCloseModal(null)
+  }
+
   const handleEdit = () => {
     setEditModalOpen(true)
   }
@@ -182,7 +305,13 @@ const ItemDetails = () => {
 
   const handleEditSubmit = async () => {
     if (!id) return
-    
+
+    // Check if there are actual changes
+    if (!hasEditChanges()) {
+      setEditModalOpen(false)
+      return
+    }
+
     try {
       setSaving(true)
       const response = await updateInventoryItem(id, editForm)
@@ -205,7 +334,13 @@ const ItemDetails = () => {
 
   const handleQuantitySubmit = async () => {
     if (!id) return
-    
+
+    // Check if quantity actually changed
+    if (!hasQuantityChanges()) {
+      setUpdateQuantityModalOpen(false)
+      return
+    }
+
     try {
       setSaving(true)
       const response = await updateItemQuantity(id, quantityForm)
@@ -228,7 +363,13 @@ const ItemDetails = () => {
 
   const handleLocationSubmit = async () => {
     if (!id || !locationForm.warehouse_location_id) return
-    
+
+    // Check if location actually changed (prevent moving to same location)
+    if (!hasLocationChanges()) {
+      setMoveLocationModalOpen(false)
+      return
+    }
+
     try {
       setSaving(true)
       const response = await moveItemLocation(id, { warehouse_location_id: locationForm.warehouse_location_id })
@@ -251,7 +392,7 @@ const ItemDetails = () => {
 
   const handleIssueSubmit = async () => {
     if (!id) return
-    
+
     try {
       setSaving(true)
       const response = await reportItemIssue(id, issueForm)
@@ -360,7 +501,7 @@ const ItemDetails = () => {
       {/* Modals */}
       <EditItemModal
         isOpen={editModalOpen}
-        onClose={() => setEditModalOpen(false)}
+        onClose={handleCloseEditModal}
         editForm={editForm}
         setEditForm={setEditForm}
         onSubmit={handleEditSubmit}
@@ -369,7 +510,7 @@ const ItemDetails = () => {
 
       <UpdateQuantityModal
         isOpen={updateQuantityModalOpen}
-        onClose={() => setUpdateQuantityModalOpen(false)}
+        onClose={handleCloseQuantityModal}
         quantityForm={quantityForm}
         setQuantityForm={setQuantityForm}
         onSubmit={handleQuantitySubmit}
@@ -378,7 +519,7 @@ const ItemDetails = () => {
 
       <MoveLocationModal
         isOpen={moveLocationModalOpen}
-        onClose={() => setMoveLocationModalOpen(false)}
+        onClose={handleCloseLocationModal}
         locationForm={locationForm}
         setLocationForm={setLocationForm}
         onSubmit={handleLocationSubmit}
@@ -388,12 +529,27 @@ const ItemDetails = () => {
 
       <ReportIssueModal
         isOpen={reportIssueModalOpen}
-        onClose={() => setReportIssueModalOpen(false)}
+        onClose={handleCloseIssueModal}
         issueForm={issueForm}
         setIssueForm={setIssueForm}
         onSubmit={handleIssueSubmit}
         saving={saving}
         maxQuantity={item?.available_quantity || 0}
+      />
+
+      {/* Discard Changes Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={discardModalOpen}
+        onClose={() => {
+          setDiscardModalOpen(false)
+          setPendingCloseModal(null)
+        }}
+        onConfirm={handleDiscardChanges}
+        type="warning"
+        title="Discard Changes?"
+        message="You have unsaved changes. Are you sure you want to discard them?"
+        confirmText="Discard"
+        cancelText="Keep Editing"
       />
 
       {/* Delete Confirmation Modal */}

@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, AlertCircle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, AlertCircle, ChevronDown } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useCalendarViewEvents } from '@/hooks/useCalendar'
 import Loader from '@/components/ui/Loader'
@@ -8,6 +8,9 @@ import Loader from '@/components/ui/Loader'
 const CalendarView = () => {
   const navigate = useNavigate()
   const [currentDate, setCurrentDate] = useState(new Date())
+  const [showMonthYearPicker, setShowMonthYearPicker] = useState(false)
+  const [pickerYear, setPickerYear] = useState(currentDate.getFullYear())
+  const pickerRef = useRef<HTMLDivElement>(null)
 
   // Fetch calendar events for the current view
   const { data: calendarEventsResponse, isLoading, error } = useCalendarViewEvents(currentDate)
@@ -112,6 +115,42 @@ const CalendarView = () => {
 
   const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ]
+
+  const shortMonths = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ]
+
+  // Close picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+        setShowMonthYearPicker(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Update picker year when currentDate changes
+  useEffect(() => {
+    setPickerYear(currentDate.getFullYear())
+  }, [currentDate])
+
+  const handleMonthSelect = (monthIndex: number) => {
+    setCurrentDate(new Date(pickerYear, monthIndex, 1))
+    setShowMonthYearPicker(false)
+  }
+
+  const handlePickerYearChange = (direction: 'prev' | 'next') => {
+    setPickerYear(prev => direction === 'prev' ? prev - 1 : prev + 1)
+  }
+
   // Loading state
   if (isLoading) {
     return (
@@ -156,31 +195,83 @@ const CalendarView = () => {
           {/* Calendar Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div className="flex items-center gap-4">
-              <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                <CalendarIcon className="h-5 w-5 text-blue-600" />
-                <select
-                  value={currentDate.getMonth()}
-                  onChange={(e) => setCurrentDate(new Date(currentDate.getFullYear(), parseInt(e.target.value), 1))}
-                  className="bg-transparent border-none font-semibold text-xl focus:outline-none cursor-pointer hover:text-blue-600 transition-colors"
+              <div className="relative" ref={pickerRef}>
+                <button
+                  onClick={() => setShowMonthYearPicker(!showMonthYearPicker)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors group"
                 >
-                  {Array.from({ length: 12 }, (_, i) => (
-                    <option key={i} value={i}>
-                      {new Date(2025, i, 1).toLocaleDateString('en-US', { month: 'long' })}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={currentDate.getFullYear()}
-                  onChange={(e) => setCurrentDate(new Date(parseInt(e.target.value), currentDate.getMonth(), 1))}
-                  className="bg-transparent border-none font-semibold text-xl focus:outline-none cursor-pointer hover:text-blue-600 transition-colors ml-1"
-                >
-                  {Array.from({ length: 10 }, (_, i) => (
-                    <option key={i} value={2020 + i}>
-                      {2020 + i}
-                    </option>
-                  ))}
-                </select>
-              </h2>
+                  <CalendarIcon className="h-5 w-5 text-blue-600" />
+                  <span className="text-xl font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                    {months[currentDate.getMonth()]} {currentDate.getFullYear()}
+                  </span>
+                  <ChevronDown className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${showMonthYearPicker ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Month/Year Picker Dropdown */}
+                {showMonthYearPicker && (
+                  <div className="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-200 p-4 z-50 min-w-[280px]">
+                    {/* Year Navigation */}
+                    <div className="flex items-center justify-between mb-4">
+                      <button
+                        onClick={() => handlePickerYearChange('prev')}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                      <span className="text-lg font-semibold text-gray-900">{pickerYear}</span>
+                      <button
+                        onClick={() => handlePickerYearChange('next')}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    {/* Month Grid */}
+                    <div className="grid grid-cols-3 gap-2">
+                      {shortMonths.map((month, index) => {
+                        const isCurrentMonth = currentDate.getMonth() === index && currentDate.getFullYear() === pickerYear
+                        const isToday = new Date().getMonth() === index && new Date().getFullYear() === pickerYear
+
+                        return (
+                          <button
+                            key={month}
+                            onClick={() => handleMonthSelect(index)}
+                            className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                              isCurrentMonth
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : isToday
+                                ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                                : 'text-gray-700 hover:bg-gray-100'
+                            }`}
+                          >
+                            {month}
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    {/* Quick Actions */}
+                    <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between">
+                      <button
+                        onClick={() => {
+                          setCurrentDate(new Date())
+                          setShowMonthYearPicker(false)
+                        }}
+                        className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        Go to Today
+                      </button>
+                      <button
+                        onClick={() => setShowMonthYearPicker(false)}
+                        className="text-sm text-gray-500 hover:text-gray-700"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center gap-2">

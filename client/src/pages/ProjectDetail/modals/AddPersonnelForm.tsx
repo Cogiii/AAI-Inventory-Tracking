@@ -4,7 +4,7 @@ import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 
 import { ConfirmationModal, PersonnelSelector, RoleSelector } from '@/components/ui'
-import { Users, User, Loader2, Calendar, Check, X, Edit2, Phone, Briefcase, UserCheck } from 'lucide-react'
+import { Users, User, Loader2, Calendar, Check, X, Edit2, Phone, Briefcase, UserCheck, CalendarPlus } from 'lucide-react'
 import { usePersonnelRoles, useAddPersonnel } from '@/hooks/useProjectDetail'
 
 interface AddPersonnelFormProps {
@@ -15,6 +15,7 @@ interface AddPersonnelFormProps {
   applyToAllDays: boolean
   setApplyToAllDays: (value: boolean) => void
   onCancel: () => void
+  onOpenAddDay?: () => void
 }
 
 interface AddedPersonnel {
@@ -34,7 +35,8 @@ const AddPersonnelForm: FC<AddPersonnelFormProps> = ({
   selectedDay,
   applyToAllDays,
   setApplyToAllDays,
-  onCancel
+  onCancel,
+  onOpenAddDay
 }) => {
   // Hooks
   const { isLoading: personnelRolesLoading } = usePersonnelRoles()
@@ -268,6 +270,37 @@ const AddPersonnelForm: FC<AddPersonnelFormProps> = ({
               </span>
             </div>
 
+            {/* Empty State - No Project Days */}
+            {projectDays.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-12 px-6 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border-2 border-dashed border-amber-300">
+                <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mb-4">
+                  <Calendar className="h-8 w-8 text-amber-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  No Project Days Scheduled
+                </h3>
+                <p className="text-sm text-gray-600 text-center max-w-md mb-6">
+                  Personnel need to be assigned to project days. Please add at least one project day before adding personnel to this project.
+                </p>
+                {onOpenAddDay && (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      onCancel()
+                      onOpenAddDay()
+                    }}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-200"
+                  >
+                    <CalendarPlus className="h-5 w-5" />
+                    Add Project Day
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {/* Main Content - Only show when project days exist */}
+            {projectDays.length > 0 && (
+              <>
             {/* Added Personnel List */}
             {addedPersonnel.length > 0 && (
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200 p-4 shadow-sm">
@@ -558,13 +591,19 @@ const AddPersonnelForm: FC<AddPersonnelFormProps> = ({
                 </div>
               </div>
             </div>
+              </>
+            )}
           </form>
         </ModalBody>
 
         <ModalFooter>
           <div className="flex justify-between items-center w-full">
             <div className="flex items-center gap-2">
-              {addedPersonnel.length > 0 ? (
+              {projectDays.length === 0 ? (
+                <span className="text-sm text-amber-600">
+                  Add project days to continue
+                </span>
+              ) : addedPersonnel.length > 0 ? (
                 <>
                   <div className="flex items-center justify-center w-8 h-8 bg-green-100 rounded-full">
                     <Check className="h-4 w-4 text-green-600" />
@@ -580,30 +619,32 @@ const AddPersonnelForm: FC<AddPersonnelFormProps> = ({
               )}
             </div>
             <div className="flex gap-2">
-              <Button 
+              <Button
                 onClick={handleCancel}
                 className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 transform hover:scale-105 transition-all duration-200 shadow-sm hover:shadow-md"
               >
                 Cancel
               </Button>
-              <Button 
-                onClick={handleSubmit}
-                disabled={!isFormValid || addPersonnelMutation.isPending}
-                className={`px-4 py-2 text-white transform hover:scale-105 transition-all duration-200 shadow-md hover:shadow-lg ${
-                  isFormValid && !addPersonnelMutation.isPending
-                    ? 'bg-blue-600 hover:bg-blue-700'
-                    : 'bg-gray-400 cursor-not-allowed'
-                }`}
-              >
-                {addPersonnelMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Adding...
-                  </>
-                ) : (
-                  <>Add {addedPersonnel.length} Personnel</>
-                )}
-              </Button>
+              {projectDays.length > 0 && (
+                <Button
+                  onClick={handleSubmit}
+                  disabled={!isFormValid || addPersonnelMutation.isPending}
+                  className={`px-4 py-2 text-white transform hover:scale-105 transition-all duration-200 shadow-md hover:shadow-lg ${
+                    isFormValid && !addPersonnelMutation.isPending
+                      ? 'bg-blue-600 hover:bg-blue-700'
+                      : 'bg-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  {addPersonnelMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Adding...
+                    </>
+                  ) : (
+                    <>Add {addedPersonnel.length} Personnel</>
+                  )}
+                </Button>
+              )}
             </div>
           </div>
         </ModalFooter>

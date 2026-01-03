@@ -19,7 +19,7 @@ BEGIN
     IF NEW.project_date <= today THEN
         UPDATE project
         SET status = 'ongoing'
-        WHERE id = NEW.project_id AND status = 'pending';
+        WHERE id = NEW.project_id AND status = 'upcoming';
     END IF;
 END$$
 
@@ -74,11 +74,11 @@ BEGIN
     -- Update projects to 'ongoing' if they have days that are today or past and status is pending
     UPDATE project p
     SET p.status = 'ongoing'
-    WHERE p.status = 'pending'
+    WHERE p.status = 'upcoming'
       AND EXISTS (
-          SELECT 1 
-          FROM project_day pd 
-          WHERE pd.project_id = p.id 
+          SELECT 1
+          FROM project_day pd
+          WHERE pd.project_id = p.id
             AND pd.project_date <= CURDATE()
       );
 END$$

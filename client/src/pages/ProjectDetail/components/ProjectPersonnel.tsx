@@ -5,6 +5,7 @@ import { ConfirmationModal } from '@/components/ui'
 import { Users, User, Phone, Calendar, Briefcase, Plus, Trash2, Loader2, AlertTriangle } from 'lucide-react'
 import AddPersonnelForm from '@/pages/ProjectDetail/modals/AddPersonnelForm'
 import { useProjectDetail, useRemovePersonnel } from '@/hooks/useProjectDetail'
+import { useProjectDetailModalStore } from '@/stores/useProjectDetailModalStore'
 
 
 interface ProjectPersonnelProps {
@@ -15,6 +16,7 @@ const ProjectPersonnel: FC<ProjectPersonnelProps> = ({ joNumber }) => {
   // All hooks must be called at the top level, before any early returns
   const { data: projectData, isLoading: projectLoading, error: projectError } = useProjectDetail(joNumber)
   const removePersonnelMutation = useRemovePersonnel()
+  const { openAddDayModal } = useProjectDetailModalStore()
   const [selectedDay, setSelectedDay] = useState<number | 'all'>('all')
   const [showAddForm, setShowAddForm] = useState(false)
   const [applyToAllDays, setApplyToAllDays] = useState(false)
@@ -251,6 +253,7 @@ const ProjectPersonnel: FC<ProjectPersonnelProps> = ({ joNumber }) => {
             setShowAddForm(false)
             setApplyToAllDays(false)
           }}
+          onOpenAddDay={openAddDayModal}
         />
 
         {/* Delete Confirmation Modal */}

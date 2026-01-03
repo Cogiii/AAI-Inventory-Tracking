@@ -3,7 +3,7 @@ import type { FC, FormEvent } from 'react'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { ConfirmationModal, ItemSelector } from '@/components/ui'
-import { Package, Loader2, AlertTriangle, Calendar, Check, X, Edit2, PackageCheck } from 'lucide-react'
+import { Package, Loader2, AlertTriangle, Calendar, Check, X, Edit2, PackageCheck, CalendarPlus } from 'lucide-react'
 import { useAddProjectItems } from '@/hooks/useInventory'
 
 interface AddItemFormProps {
@@ -14,6 +14,7 @@ interface AddItemFormProps {
   applyToAllDays: boolean
   setApplyToAllDays: (value: boolean) => void
   onCancel: () => void
+  onOpenAddDay?: () => void
 }
 
 interface AddedItem {
@@ -35,7 +36,8 @@ const AddItemForm: FC<AddItemFormProps> = ({
   selectedDay,
   applyToAllDays,
   setApplyToAllDays,
-  onCancel
+  onCancel,
+  onOpenAddDay
 }) => {
   const addProjectItemsMutation = useAddProjectItems()
   
@@ -254,6 +256,37 @@ const AddItemForm: FC<AddItemFormProps> = ({
               </span>
             </div>
 
+            {/* Empty State - No Project Days */}
+            {projectDays.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-12 px-6 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border-2 border-dashed border-amber-300">
+                <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mb-4">
+                  <Calendar className="h-8 w-8 text-amber-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  No Project Days Scheduled
+                </h3>
+                <p className="text-sm text-gray-600 text-center max-w-md mb-6">
+                  Items need to be assigned to project days. Please add at least one project day before adding items to this project.
+                </p>
+                {onOpenAddDay && (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      onCancel()
+                      onOpenAddDay()
+                    }}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-200"
+                  >
+                    <CalendarPlus className="h-5 w-5" />
+                    Add Project Day
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {/* Main Content - Only show when project days exist */}
+            {projectDays.length > 0 && (
+              <>
             {/* Added Items List */}
             {addedItems.length > 0 && (
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200 p-4 shadow-sm">
@@ -589,6 +622,8 @@ const AddItemForm: FC<AddItemFormProps> = ({
                 </div>
               </div>
             </div>
+              </>
+            )}
 
             {/* Summary removed - no longer needed with new design */}
           </form>
@@ -597,7 +632,11 @@ const AddItemForm: FC<AddItemFormProps> = ({
         <ModalFooter>
           <div className="flex justify-between items-center w-full">
             <div className="flex items-center gap-2">
-              {addedItems.length > 0 ? (
+              {projectDays.length === 0 ? (
+                <span className="text-sm text-amber-600">
+                  Add project days to continue
+                </span>
+              ) : addedItems.length > 0 ? (
                 <>
                   <div className="flex items-center justify-center w-8 h-8 bg-green-100 rounded-full">
                     <Check className="h-4 w-4 text-green-600" />
@@ -613,30 +652,32 @@ const AddItemForm: FC<AddItemFormProps> = ({
               )}
             </div>
             <div className="flex gap-2">
-              <Button 
+              <Button
                 onClick={handleCancel}
                 className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 transform hover:scale-105 transition-all duration-200 shadow-sm hover:shadow-md"
               >
                 Cancel
               </Button>
-              <Button 
-                onClick={handleSubmit}
-                disabled={!isFormValid || addProjectItemsMutation.isPending}
-                className={`px-4 py-2 text-white transform hover:scale-105 transition-all duration-200 shadow-md hover:shadow-lg ${
-                  isFormValid && !addProjectItemsMutation.isPending
-                    ? 'bg-blue-600 hover:bg-blue-700'
-                    : 'bg-gray-400 cursor-not-allowed'
-                }`}
-              >
-                {addProjectItemsMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Adding...
-                  </>
-                ) : (
-                  <>Add {addedItems.length} Item(s)</>
-                )}
-              </Button>
+              {projectDays.length > 0 && (
+                <Button
+                  onClick={handleSubmit}
+                  disabled={!isFormValid || addProjectItemsMutation.isPending}
+                  className={`px-4 py-2 text-white transform hover:scale-105 transition-all duration-200 shadow-md hover:shadow-lg ${
+                    isFormValid && !addProjectItemsMutation.isPending
+                      ? 'bg-blue-600 hover:bg-blue-700'
+                      : 'bg-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  {addProjectItemsMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Adding...
+                    </>
+                  ) : (
+                    <>Add {addedItems.length} Item(s)</>
+                  )}
+                </Button>
+              )}
             </div>
           </div>
         </ModalFooter>

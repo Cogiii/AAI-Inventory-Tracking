@@ -17,12 +17,12 @@ const auth = async (req, res, next) => {
     
     // Fetch user with position permissions from database
     const [users] = await pool.execute(`
-      SELECT u.*, p.name as position_name, p.can_manage_projects, p.can_edit_project, 
-             p.can_add_project, p.can_delete_project, p.can_manage_inventory, 
+      SELECT u.*, p.name as position_name, p.can_manage_projects, p.can_edit_project,
+             p.can_add_project, p.can_delete_project, p.can_manage_inventory,
              p.can_add_inventory, p.can_edit_inventory, p.can_delete_inventory,
              p.can_manage_users, p.can_edit_user, p.can_add_user, p.can_delete_user
-      FROM user u 
-      LEFT JOIN position p ON u.position_id = p.id 
+      FROM user u
+      LEFT JOIN \`position\` p ON u.position_id = p.id
       WHERE u.id = ? AND u.is_active = TRUE
     `, [decoded.id]);
     

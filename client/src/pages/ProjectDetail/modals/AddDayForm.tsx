@@ -6,7 +6,7 @@ import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { ConfirmationModal } from '@/components/ui'
 import LocationSelector from '@/components/ui/location-selector'
-import { Calendar, ToggleLeft, ToggleRight, Loader2, Plus, X, CalendarDays, AlertCircle } from 'lucide-react'
+import { Calendar, Loader2, Plus, X, AlertCircle } from 'lucide-react'
 import { useAddProjectDay, useProjectDetail, useLocations } from '@/hooks/useProjectDetail'
 import { AddProjectDaySchema, type AddProjectDayData } from '@/schemas/project-detail'
 
@@ -227,162 +227,101 @@ const AddDayForm: FC<AddDayFormProps> = ({
 
 
 
-            {/* Apply to Multiple Days Toggle */}
+            {/* Apply to Multiple Days Option */}
             <div className="border-t pt-4">
-              <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-gray-50 to-gray-100/50 rounded-lg border border-gray-200">
-                <button
-                  type="button"
-                  onClick={handleToggleMultipleDays}
-                  className={`flex items-center gap-3 text-sm p-3 rounded-lg transition-all duration-200 hover:scale-[1.02] ${
-                    applyToMultipleDays 
-                      ? 'bg-blue-100 hover:bg-blue-200 text-blue-700 border-2 border-blue-300 shadow-sm' 
-                      : 'bg-white hover:bg-gray-50 text-gray-600 border-2 border-gray-300 hover:border-gray-400'
-                  }`}
-                >
-                  {applyToMultipleDays ? (
-                    <ToggleRight className="h-5 w-5 text-blue-600" />
-                  ) : (
-                    <ToggleLeft className="h-5 w-5 text-gray-400" />
-                  )}
-                  <div className="flex flex-col items-start">
-                    <span className="font-medium">Apply same location to multiple days</span>
-                    <span className="text-xs opacity-75">
-                      {applyToMultipleDays ? 'Click to disable' : 'Click to add multiple dates with same location'}
-                    </span>
-                  </div>
-                </button>
-              </div>
-              
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={applyToMultipleDays}
+                  onChange={handleToggleMultipleDays}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Add multiple dates with same location</span>
+              </label>
+
               {applyToMultipleDays && (
-                <div className="mt-3 p-4 bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-lg border border-blue-200">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <CalendarDays className="h-4 w-4 text-blue-600" />
-                      <label className="text-sm font-medium text-gray-700">
-                        Additional Dates
-                      </label>
-                    </div>
+                <div className="mt-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-gray-700">
+                      Additional Dates
+                    </label>
                     <button
                       type="button"
                       onClick={handleAddDay}
                       disabled={additionalDays.length >= 10}
-                      className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-all duration-200 ${
-                        additionalDays.length >= 10 
-                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                          : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-sm hover:scale-105'
-                      }`}
-                      title={additionalDays.length >= 10 ? 'Maximum 10 dates allowed' : 'Add another date'}
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Plus className="h-3 w-3" />
                       Add Date
                     </button>
                   </div>
-                  
-                  {/* Scrollable container for dates */}
-                  <div className="max-h-32 overflow-y-auto pr-2 compact-scrollbar">
-                    <div className="space-y-2">
-                      {additionalDays.map((date, index) => (
-                        <div key={index} className="space-y-1">
-                          <div className="flex items-center gap-2 group">
-                            <div className="flex-1 relative">
-                              <input
-                                type="date"
-                                value={date}
-                                min={getTomorrowDate()}
-                                onChange={(e) => handleDayChange(index, e.target.value)}
-                                className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition-all duration-200 ${
-                                  date && isDateAlreadyAdded(date) 
-                                    ? 'border-amber-400 bg-amber-50' 
-                                    : 'border-gray-300'
-                                }`}
-                                placeholder={`Date ${index + 1}`}
-                              />
-                              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-gray-400 pointer-events-none">
-                                {index + 1}
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveDay(index)}
-                              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-all duration-200 opacity-0 group-hover:opacity-100 hover:scale-110"
-                              title="Remove this date"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                          {date && isDateAlreadyAdded(date) && (
-                            <p className="text-amber-600 text-xs ml-1 flex items-center gap-1">
-                              <AlertCircle className="h-3 w-3" />
-                              Already added
-                            </p>
-                          )}
+
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {additionalDays.map((date, index) => (
+                      <div key={index}>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="date"
+                            value={date}
+                            min={getTomorrowDate()}
+                            onChange={(e) => handleDayChange(index, e.target.value)}
+                            className={`flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm ${
+                              date && isDateAlreadyAdded(date)
+                                ? 'border-amber-400 bg-amber-50'
+                                : 'border-gray-300'
+                            }`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveDay(index)}
+                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
                         </div>
-                      ))}
-                    </div>
+                        {date && isDateAlreadyAdded(date) && (
+                          <p className="text-amber-600 text-xs mt-1 flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            This date is already added
+                          </p>
+                        )}
+                      </div>
+                    ))}
                   </div>
 
-                  {/* Info footer */}
-                  <div className="mt-3 pt-2 border-t border-blue-200">
-                    <div className="flex items-start gap-2">
-                      <div className="flex-1">
-                        <p className="text-xs text-blue-700 font-medium">
-                          📍 Location: "{selectedLocation?.name || 'Select location above'}"
-                        </p>
-                        <p className="text-xs text-blue-600/80 mt-1">
-                          All dates will use the same location. Add up to 10 additional dates.
-                        </p>
-                      </div>
-                      <div className="text-xs text-blue-600/70 font-mono bg-blue-100 px-2 py-1 rounded">
-                        {additionalDays.filter(d => d).length}/10
-                      </div>
-                    </div>
-                  </div>
+                  {additionalDays.length > 0 && (
+                    <p className="text-xs text-gray-500">
+                      {additionalDays.filter(d => d).length} of 10 additional dates
+                    </p>
+                  )}
                 </div>
               )}
             </div>
           </ModalBody>
 
-          <ModalFooter className="flex-col gap-3">
-            {applyToMultipleDays && getTotalDaysCount() > 1 && (
-              <div className="w-full px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
-                <p className="text-sm text-green-700 text-center">
-                  ✅ Ready to create <strong>{getTotalDaysCount()} project days</strong> 
-                  {selectedLocation && ` at "${selectedLocation.name}"`}
-                </p>
-              </div>
-            )}
-            <div className="flex gap-3 w-full">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={handleCancel} 
-                disabled={addProjectDayMutation.isPending}
-                className="flex-1 hover:bg-gray-100 hover:border-gray-300 transition-all duration-200 hover:shadow-sm"
-              >
-                Cancel
-              </Button>
-              <Button 
-                type="submit" 
-                disabled={addProjectDayMutation.isPending}
-                className="flex-1 hover:bg-blue-600 hover:shadow-lg transition-all duration-200 hover:scale-[1.02]"
-              >
+          <ModalFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancel}
+              disabled={addProjectDayMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={addProjectDayMutation.isPending}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
               {addProjectDayMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Adding Days...
+                  Adding...
                 </>
               ) : (
-                <>
-                  Add Day{getTotalDaysCount() > 1 ? 's' : ''}
-                  {getTotalDaysCount() > 1 && (
-                    <span className="ml-1 px-1.5 py-0.5 bg-blue-200 text-blue-800 text-xs font-semibold rounded-full">
-                      {getTotalDaysCount()}
-                    </span>
-                  )}
-                </>
+                getTotalDaysCount() > 1 ? `Add ${getTotalDaysCount()} Days` : 'Add Day'
               )}
-              </Button>
-            </div>
+            </Button>
           </ModalFooter>
         </form>
       </Modal>

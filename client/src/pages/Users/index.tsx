@@ -21,6 +21,8 @@ const UserManagement: FC = () => {
     error: usersError,
     pagination,
     fetchUsers,
+    createUser,
+    updateUser,
     toggleUserStatus,
     deleteUser,
     hasPermission
@@ -386,6 +388,8 @@ const UserManagement: FC = () => {
         onCloseEditModal={() => setSelectedUser(null)}
         currentUserRole={currentUser?.positionName}
         positions={positions.map(p => ({ id: p.id, name: p.name }))}
+        onCreateUser={createUser}
+        onUpdateUser={updateUser}
       />
 
       <UserDetailModal

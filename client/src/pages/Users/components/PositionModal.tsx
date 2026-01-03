@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Shield, Check } from 'lucide-react';
+import { Shield, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal';
 import type { Position } from '@/services/api/users';
 
 interface PositionModalProps {
@@ -67,7 +68,7 @@ const PositionModal: React.FC<PositionModalProps> = ({
       });
     }
     setError(null);
-  }, [position]);
+  }, [position, isOpen]);
 
   const handlePermissionChange = (permission: string, checked: boolean) => {
     setFormData(prev => ({
@@ -102,7 +103,7 @@ const PositionModal: React.FC<PositionModalProps> = ({
     if (!checked && !permission.startsWith('canManage')) {
       const area = permission.replace(/^can(Edit|Add|Delete)/, '').toLowerCase();
       const managePermission = `canManage${area.charAt(0).toUpperCase() + area.slice(1)}s`;
-      
+
       setFormData(prev => {
         const otherPermissions = Object.entries(prev.permissions)
           .filter(([key]) => key !== permission && key !== managePermission && key.toLowerCase().includes(area))
@@ -168,26 +169,15 @@ const PositionModal: React.FC<PositionModalProps> = ({
     }
   ];
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center p-6 border-b border-gray-200">
-          <div className="flex items-center gap-2">
-            <Shield className="w-5 h-5 text-blue-600" />
-            <h2 className="text-xl font-semibold text-gray-900">
-              {isEditing ? 'Edit Position' : 'Create New Position'}
-            </h2>
-          </div>
-          <Button variant="outline" size="sm" onClick={onClose}>
-            <X className="w-4 h-4" />
-          </Button>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={isEditing ? 'Edit Position' : 'Create New Position'}
+      size="2xl"
+    >
+      <ModalBody>
+        <form id="position-form" onSubmit={handleSubmit} className="space-y-6">
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <p className="text-red-600 text-sm">{error}</p>
@@ -213,8 +203,11 @@ const PositionModal: React.FC<PositionModalProps> = ({
 
           {/* Permissions */}
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Permissions</h3>
-            <div className="space-y-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Shield className="w-5 h-5 text-blue-600" />
+              <h3 className="text-lg font-semibold text-gray-900">Permissions</h3>
+            </div>
+            <div className="space-y-4">
               {permissionGroups.map((group) => (
                 <div key={group.title} className="border border-gray-200 rounded-lg p-4">
                   <div className="flex items-center mb-3">
@@ -251,38 +244,37 @@ const PositionModal: React.FC<PositionModalProps> = ({
               ))}
             </div>
           </div>
-
-          {/* Actions */}
-          <div className="flex justify-end gap-3 pt-6 border-t border-gray-200">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              disabled={isLoading}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={isLoading || !formData.name.trim()}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              {isLoading ? (
-                <div className="flex items-center gap-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  {isEditing ? 'Updating...' : 'Creating...'}
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <Check className="w-4 h-4" />
-                  {isEditing ? 'Update Position' : 'Create Position'}
-                </div>
-              )}
-            </Button>
-          </div>
         </form>
-      </div>
-    </div>
+      </ModalBody>
+
+      <ModalFooter>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onClose}
+          disabled={isLoading}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          form="position-form"
+          disabled={isLoading || !formData.name.trim()}
+        >
+          {isLoading ? (
+            <div className="flex items-center gap-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              {isEditing ? 'Updating...' : 'Creating...'}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Check className="w-4 h-4" />
+              {isEditing ? 'Update Position' : 'Create Position'}
+            </div>
+          )}
+        </Button>
+      </ModalFooter>
+    </Modal>
   );
 };
 

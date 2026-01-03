@@ -55,15 +55,29 @@ export const useLocations = () => {
 };
 
 // Mutation hooks
+export const useCreatePersonnel = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: projectDetailMutationAPI.createPersonnel,
+    onSuccess: () => {
+      // Invalidate and refetch personnel list
+      queryClient.invalidateQueries({
+        queryKey: PROJECT_DETAIL_KEYS.personnelRoles(),
+      });
+    },
+  });
+};
+
 export const useAddPersonnel = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: projectDetailMutationAPI.addPersonnel,
     onSuccess: (_, variables) => {
       // Invalidate and refetch project detail for the affected project
       const joNumber = variables.joNumber;
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         queryKey: ['project-detail', 'detail', joNumber],
         exact: false
       });
@@ -225,6 +239,7 @@ export default {
   useAvailableItems,
   usePersonnelRoles,
   useLocations,
+  useCreatePersonnel,
   useAddPersonnel,
   useRemovePersonnel,
   useAddProjectDay,

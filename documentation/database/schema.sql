@@ -146,7 +146,7 @@ CREATE TABLE project_item (
     damaged_quantity INT DEFAULT 0,
     lost_quantity INT DEFAULT 0,
     returned_quantity INT DEFAULT 0,
-    status ENUM('allocated', 'returned') DEFAULT 'pending', -- Accepted, Rejected, Pending
+    status ENUM('allocated', 'returned') DEFAULT 'allocated',
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NULL ON UPDATE NOW()
 );

@@ -6,6 +6,7 @@ import AddItemForm from '../modals/AddItemForm'
 import EditItemForm from '../modals/EditItemForm'
 import { ConfirmationModal } from '@/components/ui'
 import { useProjectDetail, useDeleteProjectItem } from '@/hooks/useProjectDetail'
+import { useProjectDetailModalStore } from '@/stores/useProjectDetailModalStore'
 
 interface ProjectItemsProps {
   joNumber?: string
@@ -15,7 +16,8 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
   // All hooks must be called before any conditional returns
   const { data: projectData, isLoading: projectLoading, error: projectError } = useProjectDetail(joNumber)
   const deleteProjectItemMutation = useDeleteProjectItem()
-  
+  const { openAddDayModal } = useProjectDetailModalStore()
+
   const [selectedDay, setSelectedDay] = useState<number | 'all'>('all')
   const [showAddForm, setShowAddForm] = useState(false)
   const [applyToAllDays, setApplyToAllDays] = useState(false)
@@ -302,6 +304,7 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
             setShowAddForm(false)
             setApplyToAllDays(false)
           }}
+          onOpenAddDay={openAddDayModal}
         />
 
         {/* Edit Project Item Form Modal */}

@@ -43,7 +43,41 @@ router.get('/jo/:joNumber', async (req, res) => {
     }
     
     const project = projectRows[0];
-    
+
+    // Auto-update project status based on project_day dates
+    const today = new Date().toISOString().split('T')[0];
+
+    // Check if should be ongoing (has days <= today but status is upcoming)
+    if (project.status === 'upcoming') {
+      const [startedDays] = await pool.execute(
+        'SELECT COUNT(*) as count FROM project_day WHERE project_id = ? AND project_date <= ?',
+        [project.id, today]
+      );
+      if (startedDays[0].count > 0) {
+        await pool.execute('UPDATE project SET status = ? WHERE id = ?', ['ongoing', project.id]);
+        project.status = 'ongoing';
+      }
+    }
+
+    // Check if should be completed (all days <= today and status is ongoing)
+    if (project.status === 'ongoing') {
+      const [futureDays] = await pool.execute(
+        'SELECT COUNT(*) as count FROM project_day WHERE project_id = ? AND project_date > ?',
+        [project.id, today]
+      );
+      if (futureDays[0].count === 0) {
+        // Make sure there are project days before marking as completed
+        const [totalDays] = await pool.execute(
+          'SELECT COUNT(*) as count FROM project_day WHERE project_id = ?',
+          [project.id]
+        );
+        if (totalDays[0].count > 0) {
+          await pool.execute('UPDATE project SET status = ? WHERE id = ?', ['completed', project.id]);
+          project.status = 'completed';
+        }
+      }
+    }
+
     // 2. Get project days with locations
     const projectDaysQuery = `
       SELECT 
@@ -144,10 +178,11 @@ router.get('/jo/:joNumber', async (req, res) => {
     };
 
     const projectLogsQuery = `
-      SELECT 
+      SELECT
         pl.id,
         pl.project_id,
         pl.project_day_id,
+        pd.project_date,
         pl.log_type,
         pl.description,
         pl.recorded_by,
@@ -155,6 +190,7 @@ router.get('/jo/:joNumber', async (req, res) => {
         pl.created_at
       FROM project_log pl
       LEFT JOIN user u ON pl.recorded_by = u.id
+      LEFT JOIN project_day pd ON pl.project_day_id = pd.id
       WHERE pl.project_id = ?
       ORDER BY pl.created_at DESC
       LIMIT ${logsLimit} OFFSET ${logsOffset}
@@ -240,6 +276,76 @@ router.get('/items/:joNumber', async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: 'Internal server error' 
+    });
+  }
+});
+
+/**
+ * POST /api/project-detail/personnel/create
+ * Create a new personnel record
+ */
+router.post('/personnel/create', auth, async (req, res) => {
+  const { name, contact_number } = req.body;
+
+  try {
+    // Validate required fields
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name is required'
+      });
+    }
+
+    if (!contact_number || !contact_number.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Contact number is required'
+      });
+    }
+
+    // Validate contact number format (11 digits starting with 09)
+    const phoneRegex = /^09\d{9}$/;
+    if (!phoneRegex.test(contact_number)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Contact number must be 11 digits starting with 09'
+      });
+    }
+
+    // Insert new personnel
+    const insertQuery = `
+      INSERT INTO personnel (name, contact_number, is_active, created_at, updated_at)
+      VALUES (?, ?, TRUE, NOW(), NOW())
+    `;
+
+    const [result] = await pool.execute(insertQuery, [name.trim(), contact_number]);
+
+    // Fetch the created personnel
+    const fetchQuery = `
+      SELECT id, name, contact_number, is_active, created_at, updated_at
+      FROM personnel
+      WHERE id = ?
+    `;
+
+    const [personnelRows] = await pool.execute(fetchQuery, [result.insertId]);
+
+    // Log the activity
+    await pool.execute(`
+      INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
+      VALUES (?, 'created', 'personnel', ?, ?, NOW())
+    `, [req.user?.id || null, result.insertId, `Created personnel "${name.trim()}"`]);
+
+    res.status(201).json({
+      success: true,
+      message: 'Personnel created successfully',
+      data: personnelRows[0]
+    });
+
+  } catch (error) {
+    console.error('Error creating personnel:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
     });
   }
 });
@@ -872,18 +978,19 @@ router.post('/project-items', auth, async (req, res) => {
       });
     }
 
-    // Get project ID from JO number
-    const projectQuery = 'SELECT id FROM project WHERE jo_number = ?';
+    // Get project ID and name from JO number
+    const projectQuery = 'SELECT id, name FROM project WHERE jo_number = ?';
     const [projectRows] = await pool.execute(projectQuery, [joNumber]);
-    
+
     if (projectRows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Project not found'
       });
     }
-    
+
     const projectId = projectRows[0].id;
+    const projectName = projectRows[0].name;
     const results = [];
     const addedItems = [];
     
@@ -998,13 +1105,52 @@ router.post('/project-items', auth, async (req, res) => {
     // Log the item addition activity
     if (addedItems.length > 0) {
       const logDescription = `Added items: ${addedItems.map(i => `${i.item_name} (${i.allocated_quantity})`).join(', ')} to ${project_day_ids.length} project day(s)`;
-      
+
       const logQuery = `
         INSERT INTO project_log (project_id, log_type, description, recorded_by, created_at)
         VALUES (?, 'activity', ?, ?, NOW())
       `;
-      
+
       await pool.execute(logQuery, [projectId, logDescription, req.user?.id || null]);
+
+      // Get project dates for the allocated days
+      const [projectDayDates] = await pool.execute(
+        `SELECT id, project_date FROM project_day WHERE id IN (${project_day_ids.map(() => '?').join(',')}) ORDER BY project_date ASC`,
+        project_day_ids
+      );
+
+      // Format dates nicely
+      const formatProjectDates = (dates) => {
+        if (dates.length === 0) return '';
+        if (dates.length === 1) {
+          return new Date(dates[0].project_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+        const sorted = dates.map(d => new Date(d.project_date)).sort((a, b) => a - b);
+        const first = sorted[0];
+        const last = sorted[sorted.length - 1];
+        const firstMonth = first.toLocaleDateString('en-US', { month: 'short' });
+        const lastMonth = last.toLocaleDateString('en-US', { month: 'short' });
+        const year = first.getFullYear();
+
+        if (firstMonth === lastMonth) {
+          return `${firstMonth} ${first.getDate()}-${last.getDate()}, ${year}`;
+        } else {
+          return `${firstMonth} ${first.getDate()} - ${lastMonth} ${last.getDate()}, ${year}`;
+        }
+      };
+      const formattedDates = formatProjectDates(projectDayDates);
+
+      // Log to activity_log for each item (inventory item view)
+      for (const item of addedItems) {
+        await pool.execute(`
+          INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
+          VALUES (?, 'allocated_to_project', 'item', ?, ?, NOW())
+        `, [
+          req.user?.id || null,
+          item.item_id,
+          `Allocated ${item.allocated_quantity} units to project "${projectName}" for ${formattedDates}`
+        ]);
+      }
     }
     
     res.json({
@@ -1064,14 +1210,15 @@ router.put('/project-items/:id', auth, async (req, res) => {
   try {
     // Get current item data with related info for logging
     const getCurrentQuery = `
-      SELECT pi.*, pd.project_id, i.name as item_name
+      SELECT pi.*, pd.project_id, pd.project_date, i.name as item_name, p.name as project_name
       FROM project_item pi
       JOIN project_day pd ON pi.project_day_id = pd.id
       JOIN item i ON pi.item_id = i.id
+      JOIN project p ON pd.project_id = p.id
       WHERE pi.id = ?
     `;
     const [currentResult] = await pool.execute(getCurrentQuery, [id]);
-    
+
     if (currentResult.length === 0) {
       return res.status(404).json({
         success: false,
@@ -1080,6 +1227,7 @@ router.put('/project-items/:id', auth, async (req, res) => {
     }
 
     const currentItem = currentResult[0];
+    const projectDate = new Date(currentItem.project_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     
     // Calculate quantity differences for inventory adjustment
     const allocatedDiff = (allocated_quantity || currentItem.allocated_quantity) - currentItem.allocated_quantity;
@@ -1129,13 +1277,23 @@ router.put('/project-items/:id', auth, async (req, res) => {
       `;
       const logDescription = `Project item "${currentItem.item_name}" updated: ${changes.join(', ')}`;
       await pool.execute(logQuery, [currentItem.project_id, currentItem.project_day_id, logDescription, req.user?.id || null]);
+
+      // Log to activity_log for inventory item view
+      await pool.execute(`
+        INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
+        VALUES (?, 'project_item_updated', 'item', ?, ?, NOW())
+      `, [
+        req.user?.id || null,
+        currentItem.item_id,
+        `Updated in project "${currentItem.project_name}" (${projectDate}): ${changes.join(', ')}`
+      ]);
     }
-    
+
     res.json({
       success: true,
       message: 'Project item updated successfully'
     });
-    
+
   } catch (error) {
     console.error('Error updating project item:', error);
     res.status(500).json({
@@ -1168,14 +1326,15 @@ router.delete('/project-items/:id', auth, async (req, res) => {
   try {
     // Get item details before deletion for inventory adjustment and logging
     const getItemQuery = `
-      SELECT pi.item_id, pi.allocated_quantity, pd.project_id, i.name as item_name
+      SELECT pi.item_id, pi.allocated_quantity, pd.project_id, pd.project_date, i.name as item_name, p.name as project_name
       FROM project_item pi
       JOIN project_day pd ON pi.project_day_id = pd.id
       JOIN item i ON pi.item_id = i.id
+      JOIN project p ON pd.project_id = p.id
       WHERE pi.id = ?
     `;
     const [itemResult] = await pool.execute(getItemQuery, [id]);
-    
+
     if (itemResult.length === 0) {
       return res.status(404).json({
         success: false,
@@ -1183,12 +1342,13 @@ router.delete('/project-items/:id', auth, async (req, res) => {
       });
     }
 
-    const { item_id, allocated_quantity, project_id, item_name } = itemResult[0];
-    
+    const { item_id, allocated_quantity, project_id, project_date, item_name, project_name } = itemResult[0];
+    const formattedDate = new Date(project_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
     // Delete project item
     const deleteQuery = 'DELETE FROM project_item WHERE id = ?';
     await pool.execute(deleteQuery, [id]);
-    
+
     // Note: Database trigger automatically restores quantities to inventory
 
     // Log the project item deletion activity
@@ -1198,12 +1358,22 @@ router.delete('/project-items/:id', auth, async (req, res) => {
     `;
     const logDescription = `Project item "${item_name}" removed (${allocated_quantity} units returned to inventory)`;
     await pool.execute(logQuery, [project_id, logDescription, req.user?.id || null]);
-    
+
+    // Log to activity_log for inventory item view
+    await pool.execute(`
+      INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
+      VALUES (?, 'returned_from_project', 'item', ?, ?, NOW())
+    `, [
+      req.user?.id || null,
+      item_id,
+      `Returned ${allocated_quantity} units from project "${project_name}" (${formattedDate})`
+    ]);
+
     res.json({
       success: true,
       message: 'Project item removed successfully'
     });
-    
+
   } catch (error) {
     console.error('Error removing project item:', error);
     res.status(500).json({

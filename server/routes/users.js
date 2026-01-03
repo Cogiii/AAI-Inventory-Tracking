@@ -16,14 +16,14 @@ router.get('/', auth, requirePermission('canManageUsers'), async (req, res) => {
     const { page = 1, limit = 10, sort = 'created_at', order = 'desc', search = '', position_id } = req.query;
     
     let query = `
-      SELECT u.id, u.first_name, u.last_name, u.email, u.username, 
-             u.position_id, p.name as position_name, u.is_active, 
+      SELECT u.id, u.first_name, u.last_name, u.email, u.username,
+             u.position_id, p.name as position_name, u.is_active,
              u.created_at, u.updated_at,
              p.can_manage_projects, p.can_edit_project, p.can_add_project, p.can_delete_project,
              p.can_manage_inventory, p.can_add_inventory, p.can_edit_inventory, p.can_delete_inventory,
              p.can_manage_users, p.can_edit_user, p.can_add_user, p.can_delete_user
       FROM user u
-      LEFT JOIN position p ON u.position_id = p.id
+      LEFT JOIN \`position\` p ON u.position_id = p.id
       WHERE 1=1
     `;
     
@@ -52,7 +52,7 @@ router.get('/', auth, requirePermission('canManageUsers'), async (req, res) => {
     let countQuery = `
       SELECT COUNT(*) as total
       FROM user u
-      LEFT JOIN position p ON u.position_id = p.id
+      LEFT JOIN \`position\` p ON u.position_id = p.id
       WHERE 1=1
     `;
     
@@ -434,7 +434,7 @@ router.get('/admin/positions', auth, requirePermission('canManageUsers'), async 
              can_manage_inventory, can_add_inventory, can_edit_inventory, can_delete_inventory,
              can_manage_users, can_edit_user, can_add_user, can_delete_user,
              created_at, updated_at
-      FROM position
+      FROM \`position\`
       ORDER BY name
     `);
 
@@ -500,7 +500,7 @@ router.post('/admin/positions', auth, requirePermission('canManageUsers'), async
     }
 
     // Check if position already exists
-    const [existing] = await pool.execute('SELECT id FROM position WHERE name = ?', [name]);
+    const [existing] = await pool.execute('SELECT id FROM `position` WHERE name = ?', [name]);
     if (existing.length > 0) {
       return res.status(400).json({
         success: false,
@@ -509,7 +509,7 @@ router.post('/admin/positions', auth, requirePermission('canManageUsers'), async
     }
 
     const [result] = await pool.execute(`
-      INSERT INTO position (
+      INSERT INTO \`position\` (
         name, can_manage_projects, can_edit_project, can_add_project, can_delete_project,
         can_manage_inventory, can_add_inventory, can_edit_inventory, can_delete_inventory,
         can_manage_users, can_edit_user, can_add_user, can_delete_user
@@ -550,9 +550,15 @@ router.post('/admin/positions', auth, requirePermission('canManageUsers'), async
 
   } catch (error) {
     console.error('Create position error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      sqlMessage: error.sqlMessage,
+      sqlState: error.sqlState
+    });
     res.status(500).json({
       success: false,
-      error: 'Server error creating position'
+      error: error.sqlMessage || error.message || 'Server error creating position'
     });
   }
 });
@@ -568,7 +574,7 @@ router.put('/admin/positions/:id', auth, requirePermission('canManageUsers'), as
     const { name, permissions } = req.body;
 
     // Check if position exists
-    const [existingPos] = await pool.execute('SELECT name FROM position WHERE id = ?', [id]);
+    const [existingPos] = await pool.execute('SELECT name FROM `position` WHERE id = ?', [id]);
     if (existingPos.length === 0) {
       return res.status(404).json({
         success: false,
@@ -589,7 +595,7 @@ router.put('/admin/positions/:id', auth, requirePermission('canManageUsers'), as
 
     if (name && name !== existingPos[0].name) {
       // Check if new name already exists
-      const [nameCheck] = await pool.execute('SELECT id FROM position WHERE name = ? AND id != ?', [name, id]);
+      const [nameCheck] = await pool.execute('SELECT id FROM `position` WHERE name = ? AND id != ?', [name, id]);
       if (nameCheck.length > 0) {
         return res.status(400).json({
           success: false,
@@ -641,7 +647,7 @@ router.put('/admin/positions/:id', auth, requirePermission('canManageUsers'), as
     updateValues.push(id);
 
     await pool.execute(
-      `UPDATE position SET ${updateFields.join(', ')} WHERE id = ?`,
+      `UPDATE \`position\` SET ${updateFields.join(', ')} WHERE id = ?`,
       updateValues
     );
 
@@ -675,7 +681,7 @@ router.delete('/admin/positions/:id', auth, requirePermission('canManageUsers'),
     const { id } = req.params;
 
     // Check if position exists
-    const [position] = await pool.execute('SELECT name FROM position WHERE id = ?', [id]);
+    const [position] = await pool.execute('SELECT name FROM `position` WHERE id = ?', [id]);
     if (position.length === 0) {
       return res.status(404).json({
         success: false,
@@ -700,7 +706,7 @@ router.delete('/admin/positions/:id', auth, requirePermission('canManageUsers'),
       });
     }
 
-    await pool.execute('DELETE FROM position WHERE id = ?', [id]);
+    await pool.execute('DELETE FROM `position` WHERE id = ?', [id]);
 
     // Log the activity
     await pool.execute(`

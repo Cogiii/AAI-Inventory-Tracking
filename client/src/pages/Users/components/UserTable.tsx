@@ -214,11 +214,22 @@ const UserTable: FC<UserTableProps> = ({
                 </button>
                 
                 {/* Page numbers */}
-                {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                  const pageNum = pagination.currentPage - 2 + i;
-                  if (pageNum < 1 || pageNum > pagination.totalPages) return null;
-                  
-                  return (
+                {(() => {
+                  const maxVisible = 5;
+                  let start = Math.max(1, pagination.currentPage - 2);
+                  let end = Math.min(pagination.totalPages, start + maxVisible - 1);
+
+                  // Adjust start if we're near the end
+                  if (end - start < maxVisible - 1) {
+                    start = Math.max(1, end - maxVisible + 1);
+                  }
+
+                  const pages = [];
+                  for (let i = start; i <= end; i++) {
+                    pages.push(i);
+                  }
+
+                  return pages.map(pageNum => (
                     <button
                       key={pageNum}
                       onClick={() => onPageChange?.(pageNum)}
@@ -230,8 +241,8 @@ const UserTable: FC<UserTableProps> = ({
                     >
                       {pageNum}
                     </button>
-                  );
-                })}
+                  ));
+                })()}
                 
                 <button
                   onClick={() => onPageChange?.(pagination.currentPage + 1)}

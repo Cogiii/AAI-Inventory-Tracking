@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { User, Plus, Search, Check, X, Phone } from 'lucide-react'
-import { usePersonnelRoles } from '@/hooks/useProjectDetail'
+import { User, Plus, Search, Check, X, Phone, Loader2 } from 'lucide-react'
+import { usePersonnelRoles, useCreatePersonnel } from '@/hooks/useProjectDetail'
 
 interface PersonnelSelectorProps {
   value?: number | null // personnel_id
@@ -32,9 +32,10 @@ const PersonnelSelector: React.FC<PersonnelSelectorProps> = ({
 
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
-  
+
   // Use API to get personnel data
   const { data: personnelRolesData } = usePersonnelRoles()
+  const createPersonnelMutation = useCreatePersonnel()
   const personnel = personnelRolesData?.personnel || []
   const selectedPersonnel = value ? personnel.find((p: any) => p.id === value) : null
 
@@ -108,22 +109,24 @@ const PersonnelSelector: React.FC<PersonnelSelectorProps> = ({
     setSearchQuery('')
   }
 
-  const handleCreatePersonnel = () => {
-    // In real app, this would call an API to create the personnel
-    const tempId = personnel.length > 0 ? Math.max(...personnel.map((p: any) => p.id)) + 1 : 1
-    const createdPersonnel = {
-      id: tempId,
-      ...newPersonnel
+  const handleCreatePersonnel = async () => {
+    try {
+      const createdPersonnel = await createPersonnelMutation.mutateAsync({
+        name: newPersonnel.name,
+        contact_number: newPersonnel.contact_number
+      })
+
+      // Select the newly created personnel
+      handlePersonnelSelect(createdPersonnel)
+      setShowCreateForm(false)
+      setNewPersonnel({
+        name: '',
+        contact_number: '',
+        is_active: true
+      })
+    } catch (error) {
+      console.error('Error creating personnel:', error)
     }
-    
-    // For now, just select the created personnel (in real app, this would be handled by proper API call)
-    handlePersonnelSelect(createdPersonnel)
-    setShowCreateForm(false)
-    setNewPersonnel({
-      name: '',
-      contact_number: '',
-      is_active: true
-    })
   }
 
   return (
@@ -212,10 +215,22 @@ const PersonnelSelector: React.FC<PersonnelSelectorProps> = ({
                   <input
                     type="text"
                     value={newPersonnel.contact_number}
-                    onChange={(e) => setNewPersonnel(prev => ({ ...prev, contact_number: e.target.value }))}
+                    onChange={(e) => {
+                      // Only allow digits and limit to 11 characters
+                      const value = e.target.value.replace(/\D/g, '').slice(0, 11)
+                      setNewPersonnel(prev => ({ ...prev, contact_number: value }))
+                    }}
                     className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="+63-917-xxx-xxxx"
+                    placeholder="09123456789"
+                    maxLength={11}
                   />
+                  {newPersonnel.contact_number && (
+                    newPersonnel.contact_number.length < 11 ? (
+                      <p className="text-xs text-amber-600 mt-1">Enter 11 digits (e.g., 09123456789)</p>
+                    ) : !newPersonnel.contact_number.startsWith('09') ? (
+                      <p className="text-xs text-red-600 mt-1">Number must start with 09</p>
+                    ) : null
+                  )}
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2">
@@ -236,10 +251,17 @@ const PersonnelSelector: React.FC<PersonnelSelectorProps> = ({
                   <button
                     type="button"
                     onClick={handleCreatePersonnel}
-                    disabled={!newPersonnel.name || !newPersonnel.contact_number}
-                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 hover:shadow-lg transition-all duration-200 hover:scale-[1.05] disabled:bg-gray-300 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-none"
+                    disabled={!newPersonnel.name || !newPersonnel.contact_number || newPersonnel.contact_number.length !== 11 || !newPersonnel.contact_number.startsWith('09') || createPersonnelMutation.isPending}
+                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 hover:shadow-lg transition-all duration-200 hover:scale-[1.05] disabled:bg-gray-300 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-none flex items-center gap-1"
                   >
-                    Add Personnel
+                    {createPersonnelMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Adding...
+                      </>
+                    ) : (
+                      'Add Personnel'
+                    )}
                   </button>
                 </div>
               </div>

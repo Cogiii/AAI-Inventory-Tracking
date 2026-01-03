@@ -122,6 +122,12 @@ export const projectsApi = {
     return response.data.data;
   },
 
+  // Get next auto-generated JO number
+  getNextJoNumber: async (): Promise<{ jo_number: string; year: number; sequence: number }> => {
+    const response = await api.get('/projects/next-jo-number');
+    return response.data.data;
+  },
+
   // Get single project with full details
   getProject: async (id: number): Promise<ProjectDetails> => {
     const response = await api.get(`/projects/${id}`);

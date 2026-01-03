@@ -18,13 +18,13 @@ class UserService {
   static async findByEmail(email) {
     try {
       const sql = `
-        SELECT u.id, u.first_name, u.last_name, u.email, 
-               COALESCE(p.name, 'No Position') as role, 
-               u.username, u.password_hash as password, u.is_active, 
+        SELECT u.id, u.first_name, u.last_name, u.email,
+               COALESCE(p.name, 'No Position') as role,
+               u.username, u.password_hash as password, u.is_active,
                u.created_at, u.updated_at
         FROM user u
-        LEFT JOIN position p ON u.position_id = p.id
-        WHERE u.email = ? 
+        LEFT JOIN \`position\` p ON u.position_id = p.id
+        WHERE u.email = ?
         LIMIT 1
       `;
       const user = await queryOne(sql, [email]);
@@ -39,12 +39,12 @@ class UserService {
   static async findById(id) {
     try {
       const sql = `
-        SELECT u.id, u.first_name, u.last_name, u.email, 
-               COALESCE(p.name, 'No Position') as role, 
+        SELECT u.id, u.first_name, u.last_name, u.email,
+               COALESCE(p.name, 'No Position') as role,
                u.username, u.is_active, u.created_at, u.updated_at
         FROM user u
-        LEFT JOIN position p ON u.position_id = p.id
-        WHERE u.id = ? 
+        LEFT JOIN \`position\` p ON u.position_id = p.id
+        WHERE u.id = ?
         LIMIT 1
       `;
       const user = await queryOne(sql, [id]);
@@ -59,13 +59,13 @@ class UserService {
   static async findByUsername(username) {
     try {
       const sql = `
-        SELECT u.id, u.first_name, u.last_name, u.email, 
-               COALESCE(p.name, 'No Position') as role, 
-               u.username, u.password_hash as password, u.is_active, 
+        SELECT u.id, u.first_name, u.last_name, u.email,
+               COALESCE(p.name, 'No Position') as role,
+               u.username, u.password_hash as password, u.is_active,
                u.created_at, u.updated_at
         FROM user u
-        LEFT JOIN position p ON u.position_id = p.id
-        WHERE u.username = ? 
+        LEFT JOIN \`position\` p ON u.position_id = p.id
+        WHERE u.username = ?
         LIMIT 1
       `;
       const user = await queryOne(sql, [username]);
@@ -80,12 +80,12 @@ class UserService {
   static async findByUsernameWithPermissions(username) {
     try {
       const sql = `
-        SELECT u.*, p.name as position_name, p.can_manage_projects, p.can_edit_project, 
-               p.can_add_project, p.can_delete_project, p.can_manage_inventory, 
+        SELECT u.*, p.name as position_name, p.can_manage_projects, p.can_edit_project,
+               p.can_add_project, p.can_delete_project, p.can_manage_inventory,
                p.can_add_inventory, p.can_edit_inventory, p.can_delete_inventory,
                p.can_manage_users, p.can_edit_user, p.can_add_user, p.can_delete_user
-        FROM user u 
-        LEFT JOIN position p ON u.position_id = p.id 
+        FROM user u
+        LEFT JOIN \`position\` p ON u.position_id = p.id
         WHERE u.username = ? AND u.is_active = TRUE
         LIMIT 1
       `;
@@ -142,7 +142,7 @@ class UserService {
       let finalPositionId = position_id;
       if (!finalPositionId && role && role !== 'staff') {
         try {
-          const positionResult = await queryOne('SELECT id FROM position WHERE name = ? LIMIT 1', [role]);
+          const positionResult = await queryOne('SELECT id FROM `position` WHERE name = ? LIMIT 1', [role]);
           if (positionResult) {
             finalPositionId = positionResult.id;
           }
@@ -199,7 +199,7 @@ class UserService {
         } else if (updateData.role) {
           // Try to find position by name if role is provided
           try {
-            const positionResult = await queryOne('SELECT id FROM position WHERE name = ? LIMIT 1', [updateData.role]);
+            const positionResult = await queryOne('SELECT id FROM `position` WHERE name = ? LIMIT 1', [updateData.role]);
             if (positionResult) {
               updateFields.push('position_id = ?');
               values.push(positionResult.id);
@@ -265,11 +265,11 @@ class UserService {
   static async findAll(limit = 50, offset = 0) {
     try {
       const sql = `
-        SELECT u.id, u.first_name, u.last_name, u.email, 
-               COALESCE(p.name, 'No Position') as role, 
+        SELECT u.id, u.first_name, u.last_name, u.email,
+               COALESCE(p.name, 'No Position') as role,
                u.username, u.is_active, u.created_at, u.updated_at
         FROM user u
-        LEFT JOIN position p ON u.position_id = p.id
+        LEFT JOIN \`position\` p ON u.position_id = p.id
         ORDER BY u.created_at DESC
         LIMIT ? OFFSET ?
       `;
@@ -347,7 +347,7 @@ class UserService {
 
   static async getAllPositions() {
     try {
-      const sql = 'SELECT id, name, created_at, updated_at FROM position ORDER BY name ASC';
+      const sql = 'SELECT id, name, created_at, updated_at FROM `position` ORDER BY name ASC';
       const positions = await query(sql);
       return positions;
     } catch (error) {
@@ -358,7 +358,7 @@ class UserService {
 
   static async getPositionById(id) {
     try {
-      const sql = 'SELECT id, name, created_at, updated_at FROM position WHERE id = ? LIMIT 1';
+      const sql = 'SELECT id, name, created_at, updated_at FROM `position` WHERE id = ? LIMIT 1';
       const position = await queryOne(sql, [id]);
       return position;
     } catch (error) {

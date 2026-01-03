@@ -1,5 +1,5 @@
 const express = require('express');
-const { auth, authorize } = require('../middleware/auth');
+const { auth, authorize, requirePermission } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
 const { pool } = require('../config/database');
 
@@ -515,8 +515,8 @@ router.get('/:id', auth, async (req, res) => {
 
 // @route   POST /api/inventory
 // @desc    Create new inventory item
-// @access  Private
-router.post('/', auth, validate(schemas.createInventoryItem), async (req, res) => {
+// @access  Private (requires canAddInventory permission)
+router.post('/', auth, requirePermission('canAddInventory'), validate(schemas.createInventoryItem), async (req, res) => {
   try {
     const {
       type,
@@ -576,6 +576,12 @@ router.post('/', auth, validate(schemas.createInventoryItem), async (req, res) =
 
     const [rows] = await pool.execute(fetchQuery, [result.insertId]);
 
+    // Log activity for item creation
+    await pool.execute(`
+      INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
+      VALUES (?, 'created', 'item', ?, ?, NOW())
+    `, [req.user?.id, result.insertId, `Created item "${name}"`]);
+
     res.status(201).json({
       success: true,
       message: 'Inventory item created successfully',
@@ -595,8 +601,8 @@ router.post('/', auth, validate(schemas.createInventoryItem), async (req, res) =
 
 // @route   PUT /api/inventory/:id
 // @desc    Update inventory item
-// @access  Private
-router.put('/:id', auth, validate(schemas.updateInventoryItem), async (req, res) => {
+// @access  Private (requires canEditInventory permission)
+router.put('/:id', auth, requirePermission('canEditInventory'), validate(schemas.updateInventoryItem), async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -661,6 +667,13 @@ router.put('/:id', auth, validate(schemas.updateInventoryItem), async (req, res)
 
     const [rows] = await pool.execute(fetchQuery, [id]);
 
+    // Log activity for item update
+    const itemName = rows[0]?.name || 'Unknown';
+    await pool.execute(`
+      INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
+      VALUES (?, 'updated', 'item', ?, ?, NOW())
+    `, [req.user?.id, id, `Updated item "${itemName}"`]);
+
     res.json({
       success: true,
       message: 'Inventory item updated successfully',
@@ -680,8 +693,8 @@ router.put('/:id', auth, validate(schemas.updateInventoryItem), async (req, res)
 
 // @route   DELETE /api/inventory/:id
 // @desc    Delete inventory item
-// @access  Private
-router.delete('/:id', auth, async (req, res) => {
+// @access  Private (requires canDeleteInventory permission)
+router.delete('/:id', auth, requirePermission('canDeleteInventory'), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -704,8 +717,16 @@ router.delete('/:id', auth, async (req, res) => {
       });
     }
 
+    const itemName = existingRows[0]?.name || 'Unknown';
+
     // Delete the item
     await pool.execute('DELETE FROM item WHERE id = ?', [id]);
+
+    // Log activity for item deletion
+    await pool.execute(`
+      INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
+      VALUES (?, 'deleted', 'item', ?, ?, NOW())
+    `, [req.user?.id, id, `Deleted item "${itemName}"`]);
 
     res.json({
       success: true,
@@ -767,15 +788,16 @@ router.get('/locations', auth, async (req, res) => {
   try {
     console.log('Locations endpoint called');
     const [rows] = await pool.execute(`
-      SELECT 
-        l.id, 
+      SELECT
+        l.id,
         l.name,
         l.type,
         l.city,
-        l.province
+        l.province,
+        CONCAT_WS(', ', NULLIF(l.street, ''), NULLIF(l.barangay, ''), l.city, l.province) as full_address
       FROM location l
       WHERE l.type IN ('warehouse', 'office')
-        AND l.name IS NOT NULL 
+        AND l.name IS NOT NULL
         AND l.is_active = TRUE
       ORDER BY l.type ASC, l.name ASC
     `);

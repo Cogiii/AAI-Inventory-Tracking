@@ -61,29 +61,33 @@ const ItemSelector: React.FC<ItemSelectorProps> = ({
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        inputRef.current &&
-        !inputRef.current.contains(event.target as Node) &&
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
+      const target = event.target as Node
+      const isInsideInput = inputRef.current && inputRef.current.contains(target)
+      const isInsideDropdown = dropdownRef.current && dropdownRef.current.contains(target)
+
+      if (!isInsideInput && !isInsideDropdown) {
         setIsOpen(false)
         setSearchQuery('')
       }
     }
 
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Update position when dropdown opens
+  useEffect(() => {
     if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
       updateDropdownPosition()
-      
-      const handleResize = () => updateDropdownPosition()
-      window.addEventListener('resize', handleResize)
-      window.addEventListener('scroll', handleResize)
-      
+
+      // Update position on scroll and resize
+      const handlePositionUpdate = () => updateDropdownPosition()
+      window.addEventListener('scroll', handlePositionUpdate, true)
+      window.addEventListener('resize', handlePositionUpdate)
+
       return () => {
-        document.removeEventListener('mousedown', handleClickOutside)
-        window.removeEventListener('resize', handleResize)
-        window.removeEventListener('scroll', handleResize)
+        window.removeEventListener('scroll', handlePositionUpdate, true)
+        window.removeEventListener('resize', handlePositionUpdate)
       }
     }
   }, [isOpen])
@@ -190,18 +194,16 @@ const ItemSelector: React.FC<ItemSelectorProps> = ({
         </div>
       )}
 
-      {/* Dropdown */}
+      {/* Dropdown Portal */}
       {isOpen && createPortal(
         <div
           ref={dropdownRef}
+          className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-y-auto"
           style={{
-            position: 'absolute',
-            top: dropdownPosition.top + 4,
-            left: dropdownPosition.left,
-            width: dropdownPosition.width,
-            zIndex: 1000,
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`,
+            width: `${dropdownPosition.width}px`
           }}
-          className="bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-y-auto"
         >
           {isLoading ? (
             <div className="p-4 text-center text-gray-500">

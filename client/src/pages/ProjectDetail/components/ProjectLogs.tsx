@@ -202,9 +202,9 @@ const ProjectLogs: FC<ProjectLogsProps> = ({ joNumber }) => {
                             <span className="text-gray-500">
                               <span className="font-medium">Recorded by:</span> {log.recorded_by_name || 'Unknown'}
                             </span>
-                            {log.project_day_id && (
+                            {log.project_date && (
                               <span className="text-gray-500">
-                                <span className="font-medium">Project Day:</span> #{log.project_day_id}
+                                <span className="font-medium">Project Day:</span> {new Date(log.project_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                               </span>
                             )}
                           </div>
