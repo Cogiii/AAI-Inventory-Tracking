@@ -69,6 +69,20 @@ export const useCreatePersonnel = () => {
   });
 };
 
+export const useCreateLocation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: projectDetailMutationAPI.createLocation,
+    onSuccess: () => {
+      // Invalidate and refetch locations list
+      queryClient.invalidateQueries({
+        queryKey: PROJECT_DETAIL_KEYS.locations(),
+      });
+    },
+  });
+};
+
 export const useAddPersonnel = () => {
   const queryClient = useQueryClient();
 
@@ -240,6 +254,7 @@ export default {
   usePersonnelRoles,
   useLocations,
   useCreatePersonnel,
+  useCreateLocation,
   useAddPersonnel,
   useRemovePersonnel,
   useAddProjectDay,

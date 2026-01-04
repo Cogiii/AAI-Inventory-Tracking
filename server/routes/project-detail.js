@@ -422,7 +422,7 @@ router.get('/debug-permissions', auth, async (req, res) => {
 router.get('/locations', async (req, res) => {
   try {
     const locationsQuery = `
-      SELECT 
+      SELECT
         id,
         name,
         type,
@@ -438,19 +438,91 @@ router.get('/locations', async (req, res) => {
       WHERE is_active = true
       ORDER BY type ASC, name ASC
     `;
-    
+
     const [locationsRows] = await pool.execute(locationsQuery);
-    
+
     res.json({
       success: true,
       data: locationsRows
     });
-    
+
   } catch (error) {
     console.error('Error fetching locations:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Internal server error' 
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+/**
+ * POST /api/project-detail/locations/create
+ * Create a new location
+ */
+router.post('/locations/create', auth, async (req, res) => {
+  const { name, type, street, barangay, city, province, region, postal_code } = req.body;
+
+  // Validation
+  if (!name || !city || !province) {
+    return res.status(400).json({
+      success: false,
+      message: 'Name, city, and province are required'
+    });
+  }
+
+  try {
+    // Insert the new location
+    const insertQuery = `
+      INSERT INTO location (name, type, street, barangay, city, province, region, postal_code, country, is_active, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Philippines', true, NOW())
+    `;
+
+    const [result] = await pool.execute(insertQuery, [
+      name,
+      type || 'project_site',
+      street || '',
+      barangay || '',
+      city,
+      province,
+      region || 'NCR',
+      postal_code || '0000'
+    ]);
+
+    // Get the created location
+    const [newLocation] = await pool.execute(`
+      SELECT
+        id,
+        name,
+        type,
+        street,
+        barangay,
+        city,
+        province,
+        region,
+        postal_code,
+        country,
+        CONCAT(street, ', ', barangay, ', ', city, ', ', province) as full_address
+      FROM location
+      WHERE id = ?
+    `, [result.insertId]);
+
+    // Log the activity
+    await pool.execute(`
+      INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
+      VALUES (?, 'created', 'location', ?, ?, NOW())
+    `, [req.user?.id || null, result.insertId, `Created location "${name}"`]);
+
+    res.status(201).json({
+      success: true,
+      message: 'Location created successfully',
+      data: newLocation[0]
+    });
+
+  } catch (error) {
+    console.error('Error creating location:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
     });
   }
 });
@@ -780,13 +852,30 @@ router.put('/project-days/:id', auth, async (req, res) => {
 
     const originalData = originalResult[0];
 
+    // Check if the new date already exists for another project day (excluding current one)
+    if (project_date !== originalData.project_date.toISOString().split('T')[0]) {
+      const checkDuplicateQuery = `
+        SELECT COUNT(*) as count
+        FROM project_day
+        WHERE project_id = ? AND project_date = ? AND id != ?
+      `;
+      const [duplicateCheck] = await pool.execute(checkDuplicateQuery, [originalData.project_id, project_date, id]);
+
+      if (duplicateCheck[0].count > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Another project day already exists for this date'
+        });
+      }
+    }
+
     // Update project day
     const updateQuery = `
-      UPDATE project_day 
+      UPDATE project_day
       SET project_date = ?, location_id = ?, updated_at = NOW()
       WHERE id = ?
     `;
-    
+
     const [result] = await pool.execute(updateQuery, [project_date, location_id, id]);
     
     // Log the project day update activity

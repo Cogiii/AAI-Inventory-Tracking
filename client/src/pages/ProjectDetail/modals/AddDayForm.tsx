@@ -48,10 +48,13 @@ const AddDayForm: FC<AddDayFormProps> = ({
 
   const watchedValues = watch()
 
-  // Get existing project days dates
+  // Get existing project days dates (using local timezone to match date input format)
   const existingDates = projectData?.project_days?.map(day => {
     const date = new Date(day.project_date)
-    return date.toISOString().split('T')[0]
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${d}`
   }) || []
 
   // Helper function to check if date is already added
@@ -73,9 +76,7 @@ const AddDayForm: FC<AddDayFormProps> = ({
   }
 
   const handleAddDay = () => {
-    if (additionalDays.length < 10) { // Max 10 additional dates
-      setAdditionalDays([...additionalDays, ''])
-    }
+    setAdditionalDays([...additionalDays, ''])
   }
 
   const handleRemoveDay = (index: number) => {
@@ -99,6 +100,48 @@ const AddDayForm: FC<AddDayFormProps> = ({
     const validAdditionalDays = additionalDays.filter(date => date.trim() !== '')
     return applyToMultipleDays ? 1 + validAdditionalDays.length : 1
   }
+
+  // Check if there are empty additional dates
+  const hasEmptyAdditionalDates = applyToMultipleDays && additionalDays.some(date => date.trim() === '')
+
+  // Count empty dates
+  const emptyDatesCount = additionalDays.filter(date => date.trim() === '').length
+
+  // Check if date is duplicate within current form selection (not in database, but in the form itself)
+  const isDateDuplicateInForm = (dateString: string, currentIndex?: number) => {
+    if (!dateString) return false
+
+    // Check against main project date
+    if (watchedValues.project_date === dateString) return true
+
+    // Check against other additional dates (excluding current index)
+    return additionalDays.some((d, i) =>
+      i !== currentIndex && d === dateString
+    )
+  }
+
+  // Check if main date is duplicated in additional dates
+  const isMainDateDuplicated = watchedValues.project_date && additionalDays.includes(watchedValues.project_date)
+
+  // Check if there are duplicate dates within the form
+  const hasDuplicateDates = applyToMultipleDays && additionalDays.some((date, index) =>
+    date.trim() !== '' && isDateDuplicateInForm(date, index)
+  )
+
+  // Count duplicate dates
+  const duplicateDatesCount = additionalDays.filter((date, index) =>
+    date.trim() !== '' && isDateDuplicateInForm(date, index)
+  ).length
+
+  // Check if main date already exists in database
+  const isMainDateAlreadyInDb = !!(watchedValues.project_date && isDateAlreadyAdded(watchedValues.project_date))
+
+  // Check if all additional dates are either empty or already in database
+  const allAdditionalDatesInDb = applyToMultipleDays && additionalDays.length > 0 &&
+    additionalDays.every(date => !date.trim() || isDateAlreadyAdded(date))
+
+  // Check if there are no valid dates to add (main date in db AND all additional dates in db or empty)
+  const hasNoValidDates = isMainDateAlreadyInDb && (!applyToMultipleDays || allAdditionalDatesInDb)
 
   const handleFormSubmit = handleSubmit((data) => {
     if (!selectedLocation || !joNumber || !projectData) return
@@ -192,12 +235,24 @@ const AddDayForm: FC<AddDayFormProps> = ({
                 id="project_date"
                 {...register('project_date')}
                 min={getTomorrowDate()}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  isMainDateDuplicated
+                    ? 'border-purple-400 bg-purple-50'
+                    : watchedValues.project_date && isDateAlreadyAdded(watchedValues.project_date)
+                      ? 'border-amber-400 bg-amber-50'
+                      : 'border-gray-300'
+                }`}
               />
               {errors.project_date && (
                 <p className="text-red-500 text-sm mt-1">{errors.project_date.message}</p>
               )}
-              {watchedValues.project_date && isDateAlreadyAdded(watchedValues.project_date) && (
+              {isMainDateDuplicated && (
+                <p className="text-purple-600 text-sm mt-1 flex items-center gap-1">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  This date is also selected in additional dates
+                </p>
+              )}
+              {watchedValues.project_date && !isMainDateDuplicated && isDateAlreadyAdded(watchedValues.project_date) && (
                 <p className="text-amber-600 text-sm mt-1 flex items-center gap-1">
                   <AlertCircle className="h-3.5 w-3.5" />
                   This date is already added to the project
@@ -248,8 +303,7 @@ const AddDayForm: FC<AddDayFormProps> = ({
                     <button
                       type="button"
                       onClick={handleAddDay}
-                      disabled={additionalDays.length >= 10}
-                      className="flex items-center gap-1 px-2 py-1 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
                     >
                       <Plus className="h-3 w-3" />
                       Add Date
@@ -266,23 +320,40 @@ const AddDayForm: FC<AddDayFormProps> = ({
                             min={getTomorrowDate()}
                             onChange={(e) => handleDayChange(index, e.target.value)}
                             className={`flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm ${
-                              date && isDateAlreadyAdded(date)
-                                ? 'border-amber-400 bg-amber-50'
-                                : 'border-gray-300'
+                              !date.trim()
+                                ? 'border-red-400 bg-red-50'
+                                : isDateDuplicateInForm(date, index)
+                                  ? 'border-purple-400 bg-purple-50'
+                                  : isDateAlreadyAdded(date)
+                                    ? 'border-amber-400 bg-amber-50'
+                                    : 'border-gray-300'
                             }`}
                           />
                           <button
                             type="button"
                             onClick={() => handleRemoveDay(index)}
-                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Remove this date"
                           >
                             <X className="h-4 w-4" />
                           </button>
                         </div>
-                        {date && isDateAlreadyAdded(date) && (
+                        {!date.trim() && (
+                          <p className="text-red-600 text-xs mt-1 flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            Please select a date or remove this field
+                          </p>
+                        )}
+                        {date && isDateDuplicateInForm(date, index) && (
+                          <p className="text-purple-600 text-xs mt-1 flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            This date is already selected
+                          </p>
+                        )}
+                        {date && !isDateDuplicateInForm(date, index) && isDateAlreadyAdded(date) && (
                           <p className="text-amber-600 text-xs mt-1 flex items-center gap-1">
                             <AlertCircle className="h-3 w-3" />
-                            This date is already added
+                            This date is already added to the project
                           </p>
                         )}
                       </div>
@@ -290,9 +361,23 @@ const AddDayForm: FC<AddDayFormProps> = ({
                   </div>
 
                   {additionalDays.length > 0 && (
-                    <p className="text-xs text-gray-500">
-                      {additionalDays.filter(d => d).length} of 10 additional dates
-                    </p>
+                    <div className="space-y-1">
+                      <p className="text-xs text-gray-500">
+                        {additionalDays.filter(d => d.trim()).length} additional date{additionalDays.filter(d => d.trim()).length !== 1 ? 's' : ''}
+                      </p>
+                      {hasEmptyAdditionalDates && (
+                        <p className="text-xs text-red-600 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          {emptyDatesCount} empty date{emptyDatesCount !== 1 ? 's' : ''} - please fill in or remove
+                        </p>
+                      )}
+                      {hasDuplicateDates && (
+                        <p className="text-xs text-purple-600 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          {duplicateDatesCount} duplicate date{duplicateDatesCount !== 1 ? 's' : ''} - please select different dates
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -310,8 +395,8 @@ const AddDayForm: FC<AddDayFormProps> = ({
             </Button>
             <Button
               type="submit"
-              disabled={addProjectDayMutation.isPending}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={addProjectDayMutation.isPending || hasEmptyAdditionalDates || hasDuplicateDates || hasNoValidDates}
+              className="bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
               {addProjectDayMutation.isPending ? (
                 <>

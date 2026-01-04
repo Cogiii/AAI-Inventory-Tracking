@@ -72,19 +72,21 @@ const PersonnelSelector: React.FC<PersonnelSelectorProps> = ({
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      // Don't close if the create modal is open
+      if (showCreateForm) return
+
       const target = event.target as Node
       const isInsideInput = inputRef.current && inputRef.current.contains(target)
       const isInsideDropdown = dropdownRef.current && dropdownRef.current.contains(target)
-      
+
       if (!isInsideInput && !isInsideDropdown) {
         setIsOpen(false)
-        setShowCreateForm(false)
       }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  }, [showCreateForm])
 
   // Update position when dropdown opens
   useEffect(() => {
@@ -109,6 +111,20 @@ const PersonnelSelector: React.FC<PersonnelSelectorProps> = ({
     setSearchQuery('')
   }
 
+  const handleOpenCreateModal = () => {
+    setIsOpen(false) // Close the dropdown
+    setShowCreateForm(true) // Open the modal
+  }
+
+  const handleCloseCreateModal = () => {
+    setShowCreateForm(false)
+    setNewPersonnel({
+      name: '',
+      contact_number: '',
+      is_active: true
+    })
+  }
+
   const handleCreatePersonnel = async () => {
     try {
       const createdPersonnel = await createPersonnelMutation.mutateAsync({
@@ -116,14 +132,9 @@ const PersonnelSelector: React.FC<PersonnelSelectorProps> = ({
         contact_number: newPersonnel.contact_number
       })
 
-      // Select the newly created personnel
-      handlePersonnelSelect(createdPersonnel)
-      setShowCreateForm(false)
-      setNewPersonnel({
-        name: '',
-        contact_number: '',
-        is_active: true
-      })
+      // Select the newly created personnel and close modal
+      onChange(createdPersonnel.id, createdPersonnel)
+      handleCloseCreateModal()
     } catch (error) {
       console.error('Error creating personnel:', error)
     }
@@ -185,7 +196,7 @@ const PersonnelSelector: React.FC<PersonnelSelectorProps> = ({
 
       {/* Dropdown Portal */}
       {isOpen && createPortal(
-        <div 
+        <div
           ref={dropdownRef}
           className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-lg max-h-96 overflow-hidden"
           style={{
@@ -194,83 +205,8 @@ const PersonnelSelector: React.FC<PersonnelSelectorProps> = ({
             width: `${dropdownPosition.width}px`
           }}
         >
-          {showCreateForm ? (
-            // Create Form
-            <div className="p-4 bg-gray-50">
-              <h4 className="font-medium text-gray-900 mb-3">Add New Personnel</h4>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Full Name *</label>
-                  <input
-                    type="text"
-                    value={newPersonnel.name}
-                    onChange={(e) => setNewPersonnel(prev => ({ ...prev, name: e.target.value }))}
-                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="Enter full name"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Contact Number *</label>
-                  <input
-                    type="text"
-                    value={newPersonnel.contact_number}
-                    onChange={(e) => {
-                      // Only allow digits and limit to 11 characters
-                      const value = e.target.value.replace(/\D/g, '').slice(0, 11)
-                      setNewPersonnel(prev => ({ ...prev, contact_number: value }))
-                    }}
-                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="09123456789"
-                    maxLength={11}
-                  />
-                  {newPersonnel.contact_number && (
-                    newPersonnel.contact_number.length < 11 ? (
-                      <p className="text-xs text-amber-600 mt-1">Enter 11 digits (e.g., 09123456789)</p>
-                    ) : !newPersonnel.contact_number.startsWith('09') ? (
-                      <p className="text-xs text-red-600 mt-1">Number must start with 09</p>
-                    ) : null
-                  )}
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCreateForm(false)
-                      setNewPersonnel({
-                        name: '',
-                        contact_number: '',
-                        is_active: true
-                      })
-                    }}
-                    className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-all duration-200 hover:shadow-sm"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCreatePersonnel}
-                    disabled={!newPersonnel.name || !newPersonnel.contact_number || newPersonnel.contact_number.length !== 11 || !newPersonnel.contact_number.startsWith('09') || createPersonnelMutation.isPending}
-                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 hover:shadow-lg transition-all duration-200 hover:scale-[1.05] disabled:bg-gray-300 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-none flex items-center gap-1"
-                  >
-                    {createPersonnelMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        Adding...
-                      </>
-                    ) : (
-                      'Add Personnel'
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            // Search Results and Create Button
-            <>
-              {/* Search Results */}
-              <div className="max-h-64 overflow-y-auto">
+          {/* Search Results */}
+          <div className="max-h-64 overflow-y-auto">
                 {filteredPersonnel.length > 0 ? (
                   filteredPersonnel.map((person) => (
                     <button
@@ -305,21 +241,131 @@ const PersonnelSelector: React.FC<PersonnelSelectorProps> = ({
                 )}
               </div>
 
-              {/* Create New Personnel Option */}
-              {allowCreate && (
-                <div className="border-t border-gray-200">
-                  <button
-                    type="button"
-                    onClick={() => setShowCreateForm(true)}
-                    className="w-full px-3 py-3 text-left hover:bg-green-50 hover:shadow-sm flex items-center gap-2 text-green-700 transition-all duration-200 hover:scale-[1.01]"
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span className="text-sm font-medium">Add new personnel</span>
-                  </button>
-                </div>
-              )}
-            </>
+          {/* Create New Personnel Option */}
+          {allowCreate && (
+            <div className="border-t border-gray-200">
+              <button
+                type="button"
+                onClick={handleOpenCreateModal}
+                className="w-full px-3 py-3 text-left hover:bg-blue-50 hover:shadow-sm flex items-center gap-2 text-blue-700 transition-all duration-200 hover:scale-[1.01]"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="text-sm font-medium">Add new personnel</span>
+              </button>
+            </div>
           )}
+        </div>,
+        document.body
+      )}
+
+      {/* Create Personnel Modal - Nested Modal with Enhanced Styling */}
+      {showCreateForm && createPortal(
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center">
+          {/* Darker overlay to emphasize nested modal */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={handleCloseCreateModal}
+          />
+
+          {/* Modal Content */}
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 transform transition-all animate-in fade-in zoom-in-95 duration-200">
+            {/* Header with accent border */}
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-t-xl px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white/20 rounded-lg">
+                    <User className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">Add New Personnel</h3>
+                    <p className="text-blue-100 text-sm">Add a new team member</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCloseCreateModal}
+                  className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Form Body */}
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Full Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newPersonnel.name}
+                  onChange={(e) => setNewPersonnel(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+                  placeholder="Enter full name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Contact Number <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={newPersonnel.contact_number}
+                    onChange={(e) => {
+                      // Only allow digits and limit to 11 characters
+                      const value = e.target.value.replace(/\D/g, '').slice(0, 11)
+                      setNewPersonnel(prev => ({ ...prev, contact_number: value }))
+                    }}
+                    className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+                    placeholder="09123456789"
+                    maxLength={11}
+                  />
+                </div>
+                {newPersonnel.contact_number && (
+                  newPersonnel.contact_number.length < 11 ? (
+                    <p className="text-xs text-amber-600 mt-1.5">Enter 11 digits (e.g., 09123456789)</p>
+                  ) : !newPersonnel.contact_number.startsWith('09') ? (
+                    <p className="text-xs text-red-600 mt-1.5">Number must start with 09</p>
+                  ) : (
+                    <p className="text-xs text-green-600 mt-1.5">Valid phone number format</p>
+                  )
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-gray-50 rounded-b-xl border-t border-gray-200 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={handleCloseCreateModal}
+                className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:shadow-sm transition-all duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCreatePersonnel}
+                disabled={!newPersonnel.name || !newPersonnel.contact_number || newPersonnel.contact_number.length !== 11 || !newPersonnel.contact_number.startsWith('09') || createPersonnelMutation.isPending}
+                className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 hover:shadow-lg transition-all duration-200 disabled:bg-gray-300 disabled:cursor-not-allowed disabled:hover:shadow-none flex items-center gap-2"
+              >
+                {createPersonnelMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4" />
+                    Add Personnel
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>,
         document.body
       )}

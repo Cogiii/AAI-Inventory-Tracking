@@ -11,6 +11,7 @@ interface ConfirmationModalProps {
   type?: 'delete' | 'update' | 'warning'
   confirmText?: string
   cancelText?: string
+  zIndex?: number
 }
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
@@ -21,7 +22,8 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   message,
   type = 'warning',
   confirmText = 'Confirm',
-  cancelText = 'Cancel'
+  cancelText = 'Cancel',
+  zIndex = 10000
 }) => {
   const getIcon = () => {
     switch (type) {
@@ -101,7 +103,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm" zIndex={zIndex}>
       <ModalBody>
         <div className="flex items-start gap-4">
           <div className="flex-shrink-0">

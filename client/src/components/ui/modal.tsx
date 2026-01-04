@@ -9,6 +9,7 @@ interface ModalProps {
   children: React.ReactNode
   className?: string
   size?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "5xl" | "full"
+  zIndex?: number
 }
 
 const sizeClasses = {
@@ -24,7 +25,7 @@ const sizeClasses = {
 }
 
 const Modal = React.forwardRef<HTMLDivElement, ModalProps>(
-  ({ isOpen, onClose, title, children, className, size = "md" }, ref) => {
+  ({ isOpen, onClose, title, children, className, size = "md", zIndex }, ref) => {
     // Handle escape key
     React.useEffect(() => {
       const handleEscape = (e: KeyboardEvent) => {
@@ -48,9 +49,12 @@ const Modal = React.forwardRef<HTMLDivElement, ModalProps>(
     if (!isOpen) return null
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="fixed inset-0 flex items-center justify-center p-4"
+        style={{ zIndex: zIndex ?? 50 }}
+      >
         {/* Backdrop */}
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 backdrop-blur-sm"
           onClick={onClose}
           aria-hidden="true"

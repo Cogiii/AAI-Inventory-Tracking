@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Shield, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal';
+import { ConfirmationModal } from '@/components/ui';
 import type { Position } from '@/services/api/users';
 
 interface PositionModalProps {
@@ -39,17 +40,37 @@ const PositionModal: React.FC<PositionModalProps> = ({
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDiscardConfirmation, setShowDiscardConfirmation] = useState(false);
+  const [originalFormData, setOriginalFormData] = useState({
+    name: '',
+    permissions: {
+      canManageProjects: false,
+      canEditProject: false,
+      canAddProject: false,
+      canDeleteProject: false,
+      canManageInventory: false,
+      canAddInventory: false,
+      canEditInventory: false,
+      canDeleteInventory: false,
+      canManageUsers: false,
+      canEditUser: false,
+      canAddUser: false,
+      canDeleteUser: false
+    }
+  });
 
   const isEditing = !!position;
 
   useEffect(() => {
     if (position) {
-      setFormData({
+      const data = {
         name: position.name,
         permissions: { ...position.permissions }
-      });
+      };
+      setFormData(data);
+      setOriginalFormData(data);
     } else {
-      setFormData({
+      const defaultData = {
         name: '',
         permissions: {
           canManageProjects: false,
@@ -65,10 +86,17 @@ const PositionModal: React.FC<PositionModalProps> = ({
           canAddUser: false,
           canDeleteUser: false
         }
-      });
+      };
+      setFormData(defaultData);
+      setOriginalFormData(defaultData);
     }
     setError(null);
   }, [position, isOpen]);
+
+  // Check if form has changes
+  const hasChanges = useMemo(() => {
+    return JSON.stringify(formData) !== JSON.stringify(originalFormData);
+  }, [formData, originalFormData]);
 
   const handlePermissionChange = (permission: string, checked: boolean) => {
     setFormData(prev => ({
@@ -139,6 +167,19 @@ const PositionModal: React.FC<PositionModalProps> = ({
     }
   };
 
+  const handleCancel = () => {
+    if (hasChanges) {
+      setShowDiscardConfirmation(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleConfirmDiscard = () => {
+    setShowDiscardConfirmation(false);
+    onClose();
+  };
+
   const permissionGroups = [
     {
       title: 'Project Management',
@@ -170,9 +211,10 @@ const PositionModal: React.FC<PositionModalProps> = ({
   ];
 
   return (
+    <>
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={handleCancel}
       title={isEditing ? 'Edit Position' : 'Create New Position'}
       size="2xl"
     >
@@ -251,7 +293,7 @@ const PositionModal: React.FC<PositionModalProps> = ({
         <Button
           type="button"
           variant="outline"
-          onClick={onClose}
+          onClick={handleCancel}
           disabled={isLoading}
         >
           Cancel
@@ -275,6 +317,18 @@ const PositionModal: React.FC<PositionModalProps> = ({
         </Button>
       </ModalFooter>
     </Modal>
+
+    <ConfirmationModal
+      isOpen={showDiscardConfirmation}
+      type="warning"
+      title="Discard Changes?"
+      message="You have unsaved changes. Are you sure you want to discard them?"
+      onConfirm={handleConfirmDiscard}
+      onClose={() => setShowDiscardConfirmation(false)}
+      confirmText="Discard"
+      cancelText="Keep Editing"
+    />
+    </>
   );
 };
 

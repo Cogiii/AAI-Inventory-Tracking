@@ -242,6 +242,18 @@ const ProjectDays: FC<ProjectDaysProps> = ({ joNumber }) => {
           isOpen={!!editingDay}
           day={editingDay}
           joNumber={joNumber}
+          existingDates={
+            // Get all project day dates except the one being edited
+            projectData?.project_days
+              ?.filter(d => d.id !== editingDay?.id)
+              .map(d => {
+                const date = new Date(d.project_date)
+                const year = date.getFullYear()
+                const month = String(date.getMonth() + 1).padStart(2, '0')
+                const day = String(date.getDate()).padStart(2, '0')
+                return `${year}-${month}-${day}`
+              }) || []
+          }
           onCancel={() => setEditingDay(null)}
         />
 

@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { FC } from 'react';
 import { Button } from '@/components/ui/button';
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal';
+import { ConfirmationModal } from '@/components/ui';
 import { Check } from 'lucide-react';
 
 interface User {
@@ -63,8 +64,16 @@ const UserModals: FC<UserModalsProps> = ({
     username: '',
     position_id: ''
   });
+  const [originalEditData, setOriginalEditData] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    username: '',
+    position_id: ''
+  });
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [showEditDiscardConfirmation, setShowEditDiscardConfirmation] = useState(false);
 
   // Filter positions based on user role
   const availablePositions = currentUserRole === 'Administrator'
@@ -89,16 +98,23 @@ const UserModals: FC<UserModalsProps> = ({
   // Populate edit form when user is selected
   useEffect(() => {
     if (selectedUser) {
-      setEditFormData({
+      const formData = {
         first_name: selectedUser.first_name,
         last_name: selectedUser.last_name,
         email: selectedUser.email,
         username: selectedUser.username,
         position_id: selectedUser.position_id.toString()
-      });
+      };
+      setEditFormData(formData);
+      setOriginalEditData(formData);
       setEditError(null);
     }
   }, [selectedUser]);
+
+  // Check if edit form has changes
+  const hasEditChanges = useMemo(() => {
+    return JSON.stringify(editFormData) !== JSON.stringify(originalEditData);
+  }, [editFormData, originalEditData]);
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,6 +166,19 @@ const UserModals: FC<UserModalsProps> = ({
     editFormData.email.trim() &&
     editFormData.username.trim() &&
     editFormData.position_id;
+
+  const handleEditCancel = () => {
+    if (hasEditChanges) {
+      setShowEditDiscardConfirmation(true);
+    } else {
+      onCloseEditModal();
+    }
+  };
+
+  const handleConfirmEditDiscard = () => {
+    setShowEditDiscardConfirmation(false);
+    onCloseEditModal();
+  };
 
   return (
     <>
@@ -282,7 +311,7 @@ const UserModals: FC<UserModalsProps> = ({
       {/* Edit User Modal */}
       <Modal
         isOpen={!!selectedUser}
-        onClose={onCloseEditModal}
+        onClose={handleEditCancel}
         title={selectedUser ? `Edit User: ${selectedUser.first_name} ${selectedUser.last_name}` : ""}
         size="lg"
       >
@@ -370,7 +399,7 @@ const UserModals: FC<UserModalsProps> = ({
         </ModalBody>
 
         <ModalFooter>
-          <Button variant="outline" onClick={onCloseEditModal} disabled={editLoading}>
+          <Button variant="outline" onClick={handleEditCancel} disabled={editLoading}>
             Cancel
           </Button>
           <Button
@@ -392,6 +421,18 @@ const UserModals: FC<UserModalsProps> = ({
           </Button>
         </ModalFooter>
       </Modal>
+
+      {/* Discard Edit Changes Confirmation */}
+      <ConfirmationModal
+        isOpen={showEditDiscardConfirmation}
+        type="warning"
+        title="Discard Changes?"
+        message="You have unsaved changes. Are you sure you want to discard them?"
+        onConfirm={handleConfirmEditDiscard}
+        onClose={() => setShowEditDiscardConfirmation(false)}
+        confirmText="Discard"
+        cancelText="Keep Editing"
+      />
     </>
   );
 };

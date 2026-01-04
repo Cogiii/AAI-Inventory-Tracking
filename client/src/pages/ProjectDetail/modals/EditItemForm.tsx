@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { FC } from 'react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
+import { ConfirmationModal } from '@/components/ui';
 import { useUpdateProjectItem } from '@/hooks/useProjectDetail';
 import { UpdateProjectItemSchema } from '@/schemas/project-detail';
 import { Package, Loader2 } from 'lucide-react';
@@ -28,10 +29,12 @@ const EditProjectItemForm: FC<EditProjectItemFormProps> = ({
 }) => {
   const updateMutation = useUpdateProjectItem();
 
+  const [showDiscardConfirmation, setShowDiscardConfirmation] = useState(false);
+
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isDirty },
     reset,
     setValue,
     watch
@@ -76,7 +79,16 @@ const EditProjectItemForm: FC<EditProjectItemFormProps> = ({
   };
 
   const handleCancel = () => {
+    if (isDirty) {
+      setShowDiscardConfirmation(true);
+    } else {
+      handleConfirmDiscard();
+    }
+  };
+
+  const handleConfirmDiscard = () => {
     reset();
+    setShowDiscardConfirmation(false);
     onCancel();
   };
 
@@ -230,6 +242,17 @@ const EditProjectItemForm: FC<EditProjectItemFormProps> = ({
           </div>
         </ModalFooter>
       </form>
+
+      <ConfirmationModal
+        isOpen={showDiscardConfirmation}
+        type="warning"
+        title="Discard Changes?"
+        message="You have unsaved changes. Are you sure you want to discard them?"
+        onConfirm={handleConfirmDiscard}
+        onClose={() => setShowDiscardConfirmation(false)}
+        confirmText="Discard"
+        cancelText="Keep Editing"
+      />
     </Modal>
   );
 };

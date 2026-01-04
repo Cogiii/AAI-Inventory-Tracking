@@ -58,19 +58,21 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      // Don't close if the create modal is open
+      if (showCreateForm) return
+
       const target = event.target as Node
       const isInsideInput = inputRef.current && inputRef.current.contains(target)
       const isInsideDropdown = dropdownRef.current && dropdownRef.current.contains(target)
-      
+
       if (!isInsideInput && !isInsideDropdown) {
         setIsOpen(false)
-        setShowCreateForm(false)
       }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  }, [showCreateForm])
 
   // Update position when dropdown opens
   useEffect(() => {
@@ -99,6 +101,19 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
     setSearchQuery('')
   }
 
+  const handleOpenCreateModal = () => {
+    setIsOpen(false) // Close the dropdown
+    setShowCreateForm(true) // Open the modal
+  }
+
+  const handleCloseCreateModal = () => {
+    setShowCreateForm(false)
+    setNewRole({
+      name: '',
+      description: ''
+    })
+  }
+
   const handleCreateRole = () => {
     // In real app, this would call an API to create the role
     const tempId = roles.length > 0 ? Math.max(...roles.map((r: any) => r.id)) + 1 : 1
@@ -107,14 +122,10 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
       name: newRole.name,
       description: newRole.description
     }
-    
-    // For now, just select the created role (in real app, this would be handled by proper API call)
-    handleRoleSelect(createdRole)
-    setShowCreateForm(false)
-    setNewRole({
-      name: '',
-      description: ''
-    })
+
+    // Select the created role and close modal
+    onChange(createdRole.id, createdRole)
+    handleCloseCreateModal()
   }
 
   const getRoleIcon = (roleName: string) => {
@@ -190,7 +201,7 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
 
       {/* Dropdown Portal */}
       {isOpen && createPortal(
-        <div 
+        <div
           ref={dropdownRef}
           className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-lg max-h-96 overflow-hidden"
           style={{
@@ -199,111 +210,140 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({
             width: `${dropdownPosition.width}px`
           }}
         >
-          {showCreateForm ? (
-            // Create Form
-            <div className="p-4 bg-gray-50">
-              <h4 className="font-medium text-gray-900 mb-3">Create New Role</h4>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Role Name *</label>
-                  <input
-                    type="text"
-                    value={newRole.name}
-                    onChange={(e) => setNewRole(prev => ({ ...prev, name: e.target.value }))}
-                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="e.g. Site Coordinator"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
-                  <textarea
-                    value={newRole.description}
-                    onChange={(e) => setNewRole(prev => ({ ...prev, description: e.target.value }))}
-                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
-                    rows={2}
-                    placeholder="Brief role description (optional)"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCreateForm(false)
-                      setNewRole({
-                        name: '',
-                        description: ''
-                      })
-                    }}
-                    className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-all duration-200 hover:shadow-sm"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCreateRole}
-                    disabled={!newRole.name}
-                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 hover:shadow-lg transition-all duration-200 hover:scale-[1.05] disabled:bg-gray-300 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-none"
-                  >
-                    Create Role
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            // Search Results and Create Button
-            <>
-              {/* Search Results */}
-              <div className="max-h-64 overflow-y-auto">
-                {filteredRoles.length > 0 ? (
-                  filteredRoles.map((role) => (
-                    <button
-                      key={role.id}
-                      type="button"
-                      onClick={() => handleRoleSelect(role)}
-                      className="w-full text-left px-3 py-3 hover:bg-blue-50 hover:shadow-sm border-b border-gray-100 last:border-b-0 focus:bg-blue-50 focus:outline-none transition-all duration-200"
-                    >
-                      <div className="flex items-start gap-2">
-                        {getRoleIcon(role.name)}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-medium text-gray-900 truncate">{role.name}</span>
-                            <span className={`px-2 py-0.5 text-xs rounded-full ${getRoleColor(role.name)}`}>
-                              Role
-                            </span>
-                          </div>
-                        </div>
-                        <Check className="h-4 w-4 text-green-600 opacity-0 group-hover:opacity-100" />
+          {/* Search Results */}
+          <div className="max-h-64 overflow-y-auto">
+            {filteredRoles.length > 0 ? (
+              filteredRoles.map((role) => (
+                <button
+                  key={role.id}
+                  type="button"
+                  onClick={() => handleRoleSelect(role)}
+                  className="w-full text-left px-3 py-3 hover:bg-blue-50 hover:shadow-sm border-b border-gray-100 last:border-b-0 focus:bg-blue-50 focus:outline-none transition-all duration-200"
+                >
+                  <div className="flex items-start gap-2">
+                    {getRoleIcon(role.name)}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium text-gray-900 truncate">{role.name}</span>
+                        <span className={`px-2 py-0.5 text-xs rounded-full ${getRoleColor(role.name)}`}>
+                          Role
+                        </span>
                       </div>
-                    </button>
-                  ))
-                ) : (
-                  <div className="px-3 py-4 text-center text-gray-500">
-                    <Shield className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-                    <p className="text-sm">No roles found for "{searchQuery}"</p>
-                    {allowCreate && (
-                      <p className="text-xs mt-1">You can create a new role below</p>
-                    )}
+                    </div>
+                    <Check className="h-4 w-4 text-green-600 opacity-0 group-hover:opacity-100" />
                   </div>
+                </button>
+              ))
+            ) : (
+              <div className="px-3 py-4 text-center text-gray-500">
+                <Shield className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                <p className="text-sm">No roles found for "{searchQuery}"</p>
+                {allowCreate && (
+                  <p className="text-xs mt-1">You can create a new role below</p>
                 )}
               </div>
+            )}
+          </div>
 
-              {/* Create New Role Option */}
-              {allowCreate && (
-                <div className="border-t border-gray-200">
-                  <button
-                    type="button"
-                    onClick={() => setShowCreateForm(true)}
-                    className="w-full px-3 py-3 text-left hover:bg-green-50 hover:shadow-sm flex items-center gap-2 text-green-700 transition-all duration-200 hover:scale-[1.01]"
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span className="text-sm font-medium">Create new role</span>
-                  </button>
-                </div>
-              )}
-            </>
+          {/* Create New Role Option */}
+          {allowCreate && (
+            <div className="border-t border-gray-200">
+              <button
+                type="button"
+                onClick={handleOpenCreateModal}
+                className="w-full px-3 py-3 text-left hover:bg-purple-50 hover:shadow-sm flex items-center gap-2 text-purple-700 transition-all duration-200 hover:scale-[1.01]"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="text-sm font-medium">Create new role</span>
+              </button>
+            </div>
           )}
+        </div>,
+        document.body
+      )}
+
+      {/* Create Role Modal - Nested Modal with Enhanced Styling */}
+      {showCreateForm && createPortal(
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center">
+          {/* Darker overlay to emphasize nested modal */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={handleCloseCreateModal}
+          />
+
+          {/* Modal Content */}
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 transform transition-all animate-in fade-in zoom-in-95 duration-200">
+            {/* Header with accent border */}
+            <div className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-t-xl px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white/20 rounded-lg">
+                    <Shield className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">Create New Role</h3>
+                    <p className="text-purple-100 text-sm">Add a new personnel role</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCloseCreateModal}
+                  className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Form Body */}
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Role Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newRole.name}
+                  onChange={(e) => setNewRole(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-shadow"
+                  placeholder="e.g. Site Coordinator"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Description <span className="text-gray-400">(optional)</span>
+                </label>
+                <textarea
+                  value={newRole.description}
+                  onChange={(e) => setNewRole(prev => ({ ...prev, description: e.target.value }))}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-shadow resize-none"
+                  rows={3}
+                  placeholder="Brief description of this role's responsibilities"
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-gray-50 rounded-b-xl border-t border-gray-200 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={handleCloseCreateModal}
+                className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:shadow-sm transition-all duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateRole}
+                disabled={!newRole.name}
+                className="px-5 py-2.5 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 hover:shadow-lg transition-all duration-200 disabled:bg-gray-300 disabled:cursor-not-allowed disabled:hover:shadow-none flex items-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Create Role
+              </button>
+            </div>
+          </div>
         </div>,
         document.body
       )}

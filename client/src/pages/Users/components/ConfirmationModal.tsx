@@ -11,6 +11,7 @@ interface ConfirmationModalProps {
   message: string;
   type: 'delete' | 'deactivate' | 'activate' | 'update';
   isLoading?: boolean;
+  zIndex?: number;
 }
 
 const ConfirmationModal: FC<ConfirmationModalProps> = ({
@@ -20,7 +21,8 @@ const ConfirmationModal: FC<ConfirmationModalProps> = ({
   title,
   message,
   type,
-  isLoading = false
+  isLoading = false,
+  zIndex = 10000
 }) => {
   const getIcon = () => {
     switch (type) {
@@ -67,7 +69,7 @@ const ConfirmationModal: FC<ConfirmationModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="" size="sm">
+    <Modal isOpen={isOpen} onClose={onClose} title="" size="sm" zIndex={zIndex}>
       <ModalBody>
         <div className="text-center">
           <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-gray-100 mb-4">

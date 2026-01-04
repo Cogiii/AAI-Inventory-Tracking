@@ -165,6 +165,21 @@ export const projectDetailMutationAPI = {
     return response.data.data;
   },
 
+  // Create new location
+  createLocation: async (data: {
+    name: string;
+    type?: 'warehouse' | 'project_site' | 'office';
+    street?: string;
+    barangay?: string;
+    city: string;
+    province: string;
+    region?: string;
+    postal_code?: string;
+  }): Promise<Location> => {
+    const response = await api.post('/project-detail/locations/create', data);
+    return response.data.data;
+  },
+
   // Personnel mutations
   addPersonnel: async (data: {
     joNumber: string;
