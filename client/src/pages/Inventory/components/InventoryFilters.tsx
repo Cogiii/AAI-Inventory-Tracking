@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import type { FC } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
-import { Filter, Search, Download } from 'lucide-react'
+import { Filter, Search, Download, Plus } from 'lucide-react'
 import { useBrands, useLocations, useExportInventory } from '@/hooks/useInventory'
 import type { FilterState } from '@/types'
+import AddInventoryModal from '../modals/AddInventoryModal'
 
 interface InventoryFiltersProps {
   filters: FilterState;
@@ -13,6 +15,8 @@ const InventoryFilters: FC<InventoryFiltersProps> = ({
   filters,
   onFiltersChange
 }) => {
+  const [showAddModal, setShowAddModal] = useState(false)
+
   // Fetch dynamic data for dropdowns
   const { data: brandsResponse, error: brandsError, isLoading: brandsLoading, isError: brandsIsError } = useBrands()
   const { data: locationsResponse, error: locationsError, isLoading: locationsLoading, isError: locationsIsError } = useLocations()
@@ -209,7 +213,7 @@ const InventoryFilters: FC<InventoryFiltersProps> = ({
 
           {/* Action Buttons */}
           <div className="flex gap-2">
-            <button 
+            <button
               onClick={handleExport}
               disabled={exportMutation.isPending}
               className="flex items-center gap-2 px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -217,9 +221,22 @@ const InventoryFilters: FC<InventoryFiltersProps> = ({
               <Download className="h-4 w-4" />
               {exportMutation.isPending ? 'Exporting...' : 'Export'}
             </button>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Add Item
+            </button>
           </div>
         </div>
       </CardContent>
+
+      {/* Add Inventory Modal */}
+      <AddInventoryModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+      />
     </Card>
   )
 }

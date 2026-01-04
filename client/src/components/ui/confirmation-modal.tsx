@@ -123,16 +123,13 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
         >
           {cancelText}
         </Button>
-        <Button 
-          type="button" 
-          variant={getButtonVariant()} 
-          onClick={() => {
-            onConfirm()
-            onClose()
-          }} 
+        <Button
+          type="button"
+          variant={getButtonVariant()}
+          onClick={onConfirm}
           className={`flex-1 transition-all duration-200 hover:shadow-lg hover:scale-[1.02] ${
-            type === 'delete' 
-              ? 'hover:bg-red-600' 
+            type === 'delete'
+              ? 'hover:bg-red-600'
               : 'hover:bg-blue-600'
           }`}
         >

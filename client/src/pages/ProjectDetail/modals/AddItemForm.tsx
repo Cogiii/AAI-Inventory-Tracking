@@ -1,10 +1,11 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import type { FC, FormEvent } from 'react'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { ConfirmationModal, ItemSelector } from '@/components/ui'
-import { Package, Loader2, AlertTriangle, Calendar, Check, X, Edit2, PackageCheck, CalendarPlus } from 'lucide-react'
+import { Package, Loader2, AlertTriangle, Calendar, Check, X, Edit2, PackageCheck, CalendarPlus, MapPin } from 'lucide-react'
 import { useAddProjectItems } from '@/hooks/useInventory'
+import { getItemLocations, type ItemLocation } from '@/services/api/inventory'
 
 interface AddItemFormProps {
   isOpen: boolean
@@ -27,6 +28,9 @@ interface AddedItem {
   available_quantity: number
   isEditing: boolean
   quantityError: string
+  source_location_id: number | null
+  source_location_name: string | null
+  locations: ItemLocation[]
 }
 
 const AddItemForm: FC<AddItemFormProps> = ({
@@ -49,6 +53,9 @@ const AddItemForm: FC<AddItemFormProps> = ({
   const [currentItemData, setCurrentItemData] = useState<any>(null)
   const [currentQuantity, setCurrentQuantity] = useState<number>(0)
   const [currentQuantityError, setCurrentQuantityError] = useState<string>('')
+  const [currentItemLocations, setCurrentItemLocations] = useState<ItemLocation[]>([])
+  const [currentLocationId, setCurrentLocationId] = useState<number | null>(null)
+  const [loadingLocations, setLoadingLocations] = useState(false)
   
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [pendingData, setPendingData] = useState<any[]>([])
@@ -106,7 +113,41 @@ const AddItemForm: FC<AddItemFormProps> = ({
     }
   }
 
-  // Validate quantity
+  // Fetch item locations when item is selected
+  const fetchItemLocations = async (itemId: number) => {
+    try {
+      setLoadingLocations(true)
+      const response = await getItemLocations(itemId)
+      if (response.success) {
+        setCurrentItemLocations(response.data.locations)
+        // Auto-select the location with the most available quantity
+        if (response.data.locations.length > 0) {
+          const bestLocation = response.data.locations.reduce((prev, current) =>
+            (current.available_quantity > prev.available_quantity) ? current : prev
+          )
+          setCurrentLocationId(bestLocation.location_id)
+        } else {
+          setCurrentLocationId(null)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching item locations:', error)
+      setCurrentItemLocations([])
+    } finally {
+      setLoadingLocations(false)
+    }
+  }
+
+  // Get current available quantity based on selected location
+  const getCurrentAvailableQuantity = () => {
+    if (currentLocationId) {
+      const location = currentItemLocations.find(loc => loc.location_id === currentLocationId)
+      return location?.available_quantity || 0
+    }
+    return currentItemData?.available_quantity || 0
+  }
+
+  // Validate quantity for a single day
   const validateQuantity = (quantity: number, availableQty: number) => {
     if (quantity <= 0) {
       return 'Quantity must be greater than 0'
@@ -116,17 +157,58 @@ const AddItemForm: FC<AddItemFormProps> = ({
     return ''
   }
 
+  // Validate total quantity across all selected days
+  const validateTotalQuantity = (quantity: number, availableQty: number, numDays: number) => {
+    const totalNeeded = quantity * numDays
+    if (totalNeeded > availableQty) {
+      return {
+        isValid: false,
+        message: `Total quantity needed (${quantity} × ${numDays} days = ${totalNeeded}) exceeds available quantity (${availableQty})`,
+        totalNeeded,
+        available: availableQty
+      }
+    }
+    return { isValid: true, message: '', totalNeeded, available: availableQty }
+  }
+
+  // Check if all added items have valid total quantities for selected days
+  const getTotalQuantityWarnings = () => {
+    if (selectedProjectDays.size <= 1) return []
+
+    return addedItems
+      .map(item => {
+        const validation = validateTotalQuantity(
+          item.allocated_quantity,
+          item.available_quantity,
+          selectedProjectDays.size
+        )
+        if (!validation.isValid) {
+          return {
+            itemName: item.item_name,
+            ...validation
+          }
+        }
+        return null
+      })
+      .filter(Boolean)
+  }
+
+  const totalQuantityWarnings = getTotalQuantityWarnings()
+
   // Add item to the list
   const handleAddItem = () => {
     if (!currentItemId || !currentItemData || currentQuantity <= 0) {
       return
     }
 
-    const error = validateQuantity(currentQuantity, currentItemData.available_quantity)
+    const availableQty = getCurrentAvailableQuantity()
+    const error = validateQuantity(currentQuantity, availableQty)
     if (error) {
       setCurrentQuantityError(error)
       return
     }
+
+    const selectedLocation = currentItemLocations.find(loc => loc.location_id === currentLocationId)
 
     const newItem: AddedItem = {
       id: Date.now().toString(),
@@ -135,18 +217,23 @@ const AddItemForm: FC<AddItemFormProps> = ({
       item_name: currentItemData.name,
       item_type: currentItemData.type,
       brand_name: currentItemData.brand_name || 'N/A',
-      available_quantity: currentItemData.available_quantity,
+      available_quantity: availableQty,
       isEditing: false,
-      quantityError: ''
+      quantityError: '',
+      source_location_id: currentLocationId,
+      source_location_name: selectedLocation?.location_name || null,
+      locations: currentItemLocations
     }
 
     setAddedItems(prev => [...prev, newItem])
-    
+
     // Clear current selection
     setCurrentItemId(null)
     setCurrentItemData(null)
     setCurrentQuantity(0)
     setCurrentQuantityError('')
+    setCurrentItemLocations([])
+    setCurrentLocationId(null)
   }
 
   // Remove item from the list
@@ -180,7 +267,7 @@ const AddItemForm: FC<AddItemFormProps> = ({
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
-    
+
     if (addedItems.length === 0) {
       return
     }
@@ -191,11 +278,12 @@ const AddItemForm: FC<AddItemFormProps> = ({
       return
     }
 
-    // Convert to items data
+    // Convert to items data with source_location_id
     const itemsData = addedItems.map(item => ({
       item_id: item.item_id,
       allocated_quantity: item.allocated_quantity,
-      status: 'allocated'
+      status: 'allocated',
+      source_location_id: item.source_location_id
     }))
 
     setPendingData(itemsData)
@@ -236,12 +324,19 @@ const AddItemForm: FC<AddItemFormProps> = ({
     setCurrentItemData(null)
     setCurrentQuantity(0)
     setCurrentQuantityError('')
+    setCurrentItemLocations([])
+    setCurrentLocationId(null)
     onCancel()
   }
 
-  const isFormValid = addedItems.length > 0 && selectedProjectDays.size > 0 && !addedItems.some(item => item.quantityError)
-  
-  const canAddCurrent = currentItemId && currentItemData && currentQuantity > 0 && !currentQuantityError
+  const hasQuantityErrors = addedItems.some(item => item.quantityError)
+  const hasTotalQuantityWarnings = totalQuantityWarnings.length > 0
+  const isFormValid = addedItems.length > 0 && selectedProjectDays.size > 0 && !hasQuantityErrors && !hasTotalQuantityWarnings
+
+  // Require location selection if item has locations in warehouse
+  const locationRequired = currentItemLocations.length > 0
+  const canAddCurrent = currentItemId && currentItemData && currentQuantity > 0 && !currentQuantityError &&
+    (!locationRequired || currentLocationId !== null)
 
   return (
     <>
@@ -326,6 +421,12 @@ const AddItemForm: FC<AddItemFormProps> = ({
                                   {item.item_type}
                                 </span>
                                 <span>{item.brand_name}</span>
+                                {item.source_location_name && (
+                                  <span className="flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded">
+                                    <MapPin className="h-3 w-3" />
+                                    {item.source_location_name}
+                                  </span>
+                                )}
                               </div>
                               
                               {/* Quantity Section */}
@@ -407,7 +508,7 @@ const AddItemForm: FC<AddItemFormProps> = ({
               
               <div className="grid grid-cols-12 gap-4 items-start">
                 {/* Item Selection */}
-                <div className="col-span-6">
+                <div className="col-span-5">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Select Item
                   </label>
@@ -418,7 +519,14 @@ const AddItemForm: FC<AddItemFormProps> = ({
                       setCurrentItemId(itemId)
                       setCurrentItemData(itemData)
                       setCurrentQuantityError('')
-                      
+                      setCurrentItemLocations([])
+                      setCurrentLocationId(null)
+
+                      // Fetch locations for this item
+                      if (itemId) {
+                        fetchItemLocations(itemId)
+                      }
+
                       // Validate current quantity against new item
                       if (currentQuantity > 0 && itemData) {
                         const error = validateQuantity(currentQuantity, itemData.available_quantity)
@@ -430,36 +538,89 @@ const AddItemForm: FC<AddItemFormProps> = ({
                   />
                 </div>
 
-                {/* Quantity Input */}
-                <div className="col-span-4">
+                {/* Source Location Selection */}
+                <div className="col-span-3">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Allocated Quantity
+                    Source Location
+                  </label>
+                  {loadingLocations ? (
+                    <div className="flex items-center justify-center h-10 bg-gray-50 border border-gray-300 rounded-lg">
+                      <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+                    </div>
+                  ) : currentItemLocations.length > 0 ? (
+                    <div className="space-y-1">
+                      <select
+                        value={currentLocationId || ''}
+                        onChange={(e) => {
+                          const locId = e.target.value ? parseInt(e.target.value) : null
+                          setCurrentLocationId(locId)
+                          // Re-validate quantity with new location's availability
+                          if (currentQuantity > 0 && locId) {
+                            const location = currentItemLocations.find(loc => loc.location_id === locId)
+                            if (location) {
+                              const error = validateQuantity(currentQuantity, location.available_quantity)
+                              setCurrentQuantityError(error)
+                            }
+                          }
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={!currentItemData}
+                      >
+                        <option value="">Select location...</option>
+                        {currentItemLocations.map(loc => (
+                          <option key={loc.location_id} value={loc.location_id}>
+                            {loc.location_name} ({loc.available_quantity} available)
+                          </option>
+                        ))}
+                      </select>
+                      {currentLocationId && (
+                        <div className="flex items-center gap-1 text-xs text-green-600">
+                          <MapPin className="h-3 w-3" />
+                          {currentItemLocations.find(l => l.location_id === currentLocationId)?.location_name}
+                        </div>
+                      )}
+                    </div>
+                  ) : currentItemData ? (
+                    <div className="flex items-center h-10 px-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+                      <AlertTriangle className="h-3 w-3 mr-1 flex-shrink-0" />
+                      No stock at any location
+                    </div>
+                  ) : (
+                    <div className="flex items-center h-10 px-3 bg-gray-50 border border-gray-300 rounded-lg text-xs text-gray-500">
+                      Select an item first
+                    </div>
+                  )}
+                </div>
+
+                {/* Quantity Input */}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Quantity
                   </label>
                   <div className="space-y-1">
                     <input
                       type="number"
                       min="1"
-                      max={currentItemData?.available_quantity || 999999}
+                      max={getCurrentAvailableQuantity() || 999999}
                       value={currentQuantity || ''}
                       onChange={(e) => {
                         const quantity = parseInt(e.target.value) || 0
                         setCurrentQuantity(quantity)
-                        if (currentItemData) {
-                          const error = validateQuantity(quantity, currentItemData.available_quantity)
-                          setCurrentQuantityError(error)
-                        }
+                        const availableQty = getCurrentAvailableQuantity()
+                        const error = validateQuantity(quantity, availableQty)
+                        setCurrentQuantityError(error)
                       }}
-                      className={`w-full px-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:border-transparent ${
+                      className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:border-transparent ${
                         currentQuantityError
                           ? 'border-red-300 focus:ring-red-500'
                           : 'border-gray-300 focus:ring-blue-500'
                       }`}
                       placeholder="0"
-                      disabled={!currentItemData}
+                      disabled={!currentItemData || (currentItemLocations.length > 0 && !currentLocationId)}
                     />
-                    {currentItemData && (
+                    {currentLocationId && currentItemLocations.length > 0 && (
                       <div className="text-xs text-gray-500">
-                        Available: {currentItemData.available_quantity}
+                        Available: {getCurrentAvailableQuantity()}
                       </div>
                     )}
                     {currentQuantityError && (
@@ -499,6 +660,9 @@ const AddItemForm: FC<AddItemFormProps> = ({
                   <span>
                     Ready to add <span className="font-semibold">{currentItemData?.name}</span> with{' '}
                     <span className="font-semibold">{currentQuantity} units</span>
+                    {currentLocationId && currentItemLocations.find(l => l.location_id === currentLocationId) && (
+                      <> from <span className="font-semibold">{currentItemLocations.find(l => l.location_id === currentLocationId)?.location_name}</span></>
+                    )}
                   </span>
                 </div>
               )}
@@ -622,6 +786,48 @@ const AddItemForm: FC<AddItemFormProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* Total Quantity Warning - Shows when items exceed available quantity across selected days */}
+            {hasTotalQuantityWarnings && (
+              <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                    <AlertTriangle className="h-5 w-5 text-red-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-sm font-semibold text-red-800 mb-2">
+                      Insufficient Inventory for Selected Days
+                    </h4>
+                    <p className="text-xs text-red-700 mb-3">
+                      The following items don't have enough available quantity to allocate across all {selectedProjectDays.size} selected days:
+                    </p>
+                    <div className="space-y-2">
+                      {totalQuantityWarnings.map((warning: any, index: number) => (
+                        <div
+                          key={index}
+                          className="bg-white border border-red-200 rounded-lg p-3"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-gray-900">
+                              {warning.itemName}
+                            </span>
+                            <span className="text-xs font-medium text-red-600 bg-red-100 px-2 py-1 rounded">
+                              Need {warning.totalNeeded} / Have {warning.available}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-600 mt-1">
+                            {warning.message}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-red-600 mt-3 font-medium">
+                      Please reduce the quantity or select fewer days to proceed.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
               </>
             )}
 
@@ -636,13 +842,22 @@ const AddItemForm: FC<AddItemFormProps> = ({
                 <span className="text-sm text-amber-600">
                   Add project days to continue
                 </span>
+              ) : hasTotalQuantityWarnings ? (
+                <>
+                  <div className="flex items-center justify-center w-8 h-8 bg-red-100 rounded-full">
+                    <AlertTriangle className="h-4 w-4 text-red-600" />
+                  </div>
+                  <span className="text-sm font-medium text-red-600">
+                    Insufficient quantity for {selectedProjectDays.size} days
+                  </span>
+                </>
               ) : addedItems.length > 0 ? (
                 <>
                   <div className="flex items-center justify-center w-8 h-8 bg-green-100 rounded-full">
                     <Check className="h-4 w-4 text-green-600" />
                   </div>
                   <span className="text-sm font-medium text-gray-700">
-                    {addedItems.length} item(s) ready to add
+                    {addedItems.length} item(s) ready to add to {selectedProjectDays.size} day(s)
                   </span>
                 </>
               ) : (

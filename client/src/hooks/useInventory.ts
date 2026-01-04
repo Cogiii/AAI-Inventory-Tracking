@@ -54,6 +54,22 @@ export const useBrands = () => {
   });
 };
 
+// Create a new brand
+export const useCreateBrand = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: inventoryAPI.createBrand,
+    onSuccess: () => {
+      // Invalidate and refetch brands list
+      queryClient.invalidateQueries({ queryKey: inventoryKeys.brands() });
+    },
+    onError: (error: any) => {
+      console.error('Failed to create brand:', error);
+    },
+  });
+};
+
 // Get locations for dropdown
 export const useLocations = () => {
   return useQuery({

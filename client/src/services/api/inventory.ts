@@ -49,7 +49,13 @@ export const deleteInventoryItem = async (id: string | number) => {
 // Get brands for dropdown
 export const getBrands = async () => {
   const { data } = await api.get('/inventory/brands');
-  return data;  
+  return data;
+};
+
+// Create a new brand
+export const createBrand = async (brandData: { name: string; description?: string }) => {
+  const { data } = await api.post('/inventory/brands', brandData);
+  return data;
 };
 
 // Get warehouse locations for dropdown
@@ -91,6 +97,34 @@ export const getItemActivity = async (id: string | number) => {
   const { data } = await api.get(`/inventory/${id}/activity`);
   return data;
 };
+
+// Get item reservations (scheduled project allocations)
+export const getItemReservations = async (id: string | number) => {
+  const { data } = await api.get(`/inventory/${id}/reservations`);
+  return data;
+};
+
+// Reservation response types
+export interface ItemReservation {
+  project_item_id: number;
+  reserved_quantity: number;
+  project_day_id: number;
+  project_date: string;
+  project_id: number;
+  jo_number: string;
+  project_name: string;
+  location_name: string | null;
+}
+
+export interface ReservationsResponse {
+  success: boolean;
+  data: {
+    item_id: number;
+    item_name: string;
+    total_reserved: number;
+    reservations: ItemReservation[];
+  };
+}
 
 // Create inventory item and assign to project
 export const createInventoryItemWithProjectAssignment = async (itemData: {
@@ -201,9 +235,117 @@ export const exportInventoryToExcel = async (params?: {
   location?: string;
   status?: 'active' | 'low_stock' | 'out_of_stock' | 'inactive' | 'all';
 }) => {
-  const response = await api.get('/inventory/export/excel', { 
+  const response = await api.get('/inventory/export/excel', {
     params,
     responseType: 'blob' // Important for file downloads
   });
   return response.data;
+};
+
+// ====================
+// MULTI-WAREHOUSE API FUNCTIONS
+// ====================
+
+// Item location types
+export interface ItemLocation {
+  id: number;
+  item_id: number;
+  location_id: number;
+  location_name: string;
+  location_type: string;
+  city: string;
+  province: string;
+  quantity: number;
+  reserved_quantity: number;
+  available_quantity: number;
+  damaged_quantity: number;
+  lost_quantity: number;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface ItemLocationsResponse {
+  success: boolean;
+  message: string;
+  data: {
+    item: { id: number; name: string; total_delivered: number };
+    locations: ItemLocation[];
+  };
+}
+
+// Delivery types
+export interface DeliveryFormData {
+  location_id: number;
+  quantity: number;
+  reference_number?: string;
+  notes?: string;
+}
+
+export interface DeliveryLogEntry {
+  id: number;
+  item_id: number;
+  location_id: number;
+  location_name: string;
+  quantity: number;
+  type: 'delivery' | 'adjustment';
+  adjustment_reason: string | null;
+  notes: string | null;
+  reference_number: string | null;
+  performed_by: number | null;
+  performed_by_name: string | null;
+  created_at: string;
+}
+
+export interface DeliveryHistoryResponse {
+  success: boolean;
+  message: string;
+  data: {
+    item: { id: number; name: string };
+    deliveries: DeliveryLogEntry[];
+  };
+}
+
+// Adjustment types
+export interface AdjustmentFormData {
+  location_id: number;
+  quantity: number;
+  reason: string;
+}
+
+// Transfer types
+export interface TransferFormData {
+  from_location_id: number;
+  to_location_id: number;
+  quantity: number;
+  notes?: string;
+}
+
+// Get item locations with quantities
+export const getItemLocations = async (id: string | number): Promise<ItemLocationsResponse> => {
+  const { data } = await api.get(`/inventory/${id}/locations`);
+  return data;
+};
+
+// Add delivery to item at specific location
+export const addDelivery = async (id: string | number, deliveryData: DeliveryFormData) => {
+  const { data } = await api.post(`/inventory/${id}/delivery`, deliveryData);
+  return data;
+};
+
+// Adjust quantity at location (admin only)
+export const adjustQuantity = async (id: string | number, adjustmentData: AdjustmentFormData) => {
+  const { data } = await api.post(`/inventory/${id}/adjustment`, adjustmentData);
+  return data;
+};
+
+// Transfer stock between locations
+export const transferStock = async (id: string | number, transferData: TransferFormData) => {
+  const { data } = await api.post(`/inventory/${id}/transfer`, transferData);
+  return data;
+};
+
+// Get delivery and adjustment history
+export const getDeliveryHistory = async (id: string | number): Promise<DeliveryHistoryResponse> => {
+  const { data } = await api.get(`/inventory/${id}/deliveries`);
+  return data;
 };

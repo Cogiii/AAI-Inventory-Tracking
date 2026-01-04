@@ -7,3 +7,10 @@ export { default as UpdateQuantityModal } from './UpdateQuantityModal'
 export { default as MoveLocationModal } from './MoveLocationModal'
 export { default as ReportIssueModal } from './ReportIssueModal'
 export { default as ActivityHistoryCard } from './ActivityHistoryCard'
+export { default as ReservationsCard } from './ReservationsCard'
+
+// Multi-warehouse components
+export { default as AddDeliveryModal } from './AddDeliveryModal'
+export { default as AdjustQuantityModal } from './AdjustQuantityModal'
+export { default as TransferStockModal } from './TransferStockModal'
+export { default as LocationQuantitiesCard } from './LocationQuantitiesCard'

@@ -83,8 +83,7 @@ export const inventoryItemSchema = z.object({
     .nullable()
     .optional(),
   status: z
-    .string()
-    .max(50, 'Status must not exceed 50 characters')
+    .enum(['in stock', 'out of stock', 'low stock', 'inactive'])
     .nullable()
     .optional()
 });
@@ -132,9 +131,17 @@ export const inventoryItemFormSchema = z.object({
     .transform(val => val === '' ? null : Number(val))
     .refine(val => val === null || !isNaN(val as number), 'Invalid warehouse location'),
   status: z
-    .string()
-    .max(50, 'Status must not exceed 50 characters')
+    .enum(['in stock', 'out of stock', 'low stock', 'inactive'])
     .optional()
+}).refine((data) => {
+  // If quantity > 0, location is required
+  if (data.delivered_quantity > 0 && data.warehouse_location_id === null) {
+    return false;
+  }
+  return true;
+}, {
+  message: 'Location is required when adding initial quantity',
+  path: ['warehouse_location_id']
 });
 
 export const updateInventoryItemSchema = inventoryItemSchema.partial();

@@ -80,7 +80,7 @@ router.get('/jo/:joNumber', async (req, res) => {
 
     // 2. Get project days with locations
     const projectDaysQuery = `
-      SELECT 
+      SELECT
         pd.id,
         pd.project_id,
         pd.project_date,
@@ -88,10 +88,15 @@ router.get('/jo/:joNumber', async (req, res) => {
         l.name as location_name,
         l.type as location_type,
         CONCAT(l.street, ', ', l.barangay, ', ', l.city, ', ', l.province) as full_address,
+        pd.status as day_status,
+        pd.completed_at,
+        pd.completed_by,
+        CONCAT(cu.first_name, ' ', cu.last_name) as completed_by_name,
         pd.created_at,
         pd.updated_at
       FROM project_day pd
       LEFT JOIN location l ON pd.location_id = l.id
+      LEFT JOIN user cu ON pd.completed_by = cu.id
       WHERE pd.project_id = ?
       ORDER BY pd.project_date ASC
     `;
@@ -630,13 +635,16 @@ router.post('/personnel', auth, async (req, res) => {
     
     // Log the personnel addition activity
     if (addedPersonnel.length > 0) {
-      const logDescription = `Added personnel: ${addedPersonnel.map(p => `${p.personnel_name} as ${p.role_name}`).join(', ')} to ${project_day_ids.length} project day(s)`;
-      
+      const personnelList = addedPersonnel.map(p => `"${p.personnel_name}" as ${p.role_name}`).join(', ');
+      const logDescription = project_day_ids.length > 1
+        ? `Assigned ${addedPersonnel.length} personnel to ${project_day_ids.length} project days: ${personnelList}`
+        : `Assigned personnel to project day: ${personnelList}`;
+
       const logQuery = `
         INSERT INTO project_log (project_id, log_type, description, recorded_by, created_at)
         VALUES (?, 'activity', ?, ?, NOW())
       `;
-      
+
       await pool.execute(logQuery, [projectId, logDescription, req.user?.id || null]);
     }
     
@@ -699,13 +707,16 @@ router.delete('/personnel/:joNumber/:projectDayId/:personnelId/:roleId', auth, a
       });
     }
     
-    // Log the personnel removal activity
-    const logDescription = `Removed personnel: ${personnelName} (${roleName}) from project day`;
+    // Log the personnel removal activity with date info
+    const [dayInfo] = await pool.execute('SELECT project_date FROM project_day WHERE id = ?', [projectDayId]);
+    const dateStr = dayInfo[0] ? new Date(dayInfo[0].project_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+
+    const logDescription = `Unassigned "${personnelName}" (${roleName}) from project day${dateStr ? ` (${dateStr})` : ''}`;
     const logQuery = `
       INSERT INTO project_log (project_id, project_day_id, log_type, description, recorded_by, created_at)
       VALUES (?, ?, 'activity', ?, ?, NOW())
     `;
-    
+
     await pool.execute(logQuery, [projectId, projectDayId, logDescription, req.user?.id || null]);
     
     res.json({
@@ -762,25 +773,29 @@ router.post('/project-days', auth, async (req, res) => {
     
     const [result] = await pool.execute(insertQuery, [project_id, project_date, location_id]);
     
-    // Log the project day creation activity
-    let locationName = '';
+    // Log the project day creation activity with location details
+    let locationInfo = '';
     if (location_id) {
-      const locationQuery = 'SELECT name FROM location WHERE id = ?';
+      const locationQuery = 'SELECT name, city, province FROM location WHERE id = ?';
       const [locationResult] = await pool.execute(locationQuery, [location_id]);
-      locationName = locationResult[0]?.name || 'Unknown Location';
+      if (locationResult[0]) {
+        const loc = locationResult[0];
+        locationInfo = ` at "${loc.name}" (${loc.city}, ${loc.province})`;
+      }
     }
-    
+
     const logQuery = `
       INSERT INTO project_log (project_id, project_day_id, log_type, description, recorded_by, created_at)
       VALUES (?, ?, 'activity', ?, ?, NOW())
     `;
-    
-    const formattedDate = new Date(project_date).toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+
+    const formattedDate = new Date(project_date).toLocaleDateString('en-US', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
     });
-    const logDescription = `Project day added for ${formattedDate}${locationName ? ` at ${locationName}` : ''}`;
+    const logDescription = `Added new project day scheduled for ${formattedDate}${locationInfo}`;
     await pool.execute(logQuery, [project_id, result.insertId, logDescription, req.user?.id || null]);
     
     // Fetch the created project day with location details
@@ -1013,14 +1028,21 @@ router.delete('/project-days/:id', auth, async (req, res) => {
       INSERT INTO project_log (project_id, project_day_id, log_type, description, recorded_by, created_at)
       VALUES (?, NULL, 'activity', ?, ?, NOW())
     `;
-    const formattedDate = new Date(projectDayData.project_date).toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+    const formattedDate = new Date(projectDayData.project_date).toLocaleDateString('en-US', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
     });
-    const logDescription = force && (hasItems || hasPersonnel)
-      ? `Project day deleted (forced): ${formattedDate}${projectDayData.location_name ? ` at ${projectDayData.location_name}` : ''} with ${itemsResult[0].count} item(s) and ${personnelResult[0].count} personnel`
-      : `Project day deleted: ${formattedDate}${projectDayData.location_name ? ` at ${projectDayData.location_name}` : ''}`;
+    let logDescription;
+    if (force && (hasItems || hasPersonnel)) {
+      const details = [];
+      if (itemsResult[0].count > 0) details.push(`${itemsResult[0].count} item(s) returned to inventory`);
+      if (personnelResult[0].count > 0) details.push(`${personnelResult[0].count} personnel unassigned`);
+      logDescription = `Deleted project day (${formattedDate})${projectDayData.location_name ? ` at "${projectDayData.location_name}"` : ''} - ${details.join(', ')}`;
+    } else {
+      logDescription = `Deleted project day (${formattedDate})${projectDayData.location_name ? ` at "${projectDayData.location_name}"` : ''}`;
+    }
     await pool.execute(logQuery, [projectDayData.project_id, logDescription, req.user?.id || null]);
     
     res.json({
@@ -1040,15 +1062,16 @@ router.delete('/project-days/:id', auth, async (req, res) => {
 /**
  * POST /api/project-detail/project-items
  * Add items to project day(s)
+ * Supports multi-warehouse with source_location_id
  */
 router.post('/project-items', auth, async (req, res) => {
   // Check permissions - user must be able to manage projects or add to projects
   const userPermissions = req.user?.permissions;
-  
+
   // Allow if user is Administrator or has proper permissions
   const isAdmin = req.user?.positionName === 'Administrator';
   const hasPermissions = userPermissions && (userPermissions.canManageProjects || userPermissions.canAddProject);
-  
+
   if (!isAdmin && !hasPermissions) {
     return res.status(403).json({
       success: false,
@@ -1057,7 +1080,7 @@ router.post('/project-items', auth, async (req, res) => {
   }
 
   const { joNumber, project_day_ids, item_assignments } = req.body;
-  
+
   try {
     // Validate required fields
     if (!joNumber || !project_day_ids || !item_assignments || !Array.isArray(project_day_ids) || !Array.isArray(item_assignments)) {
@@ -1082,37 +1105,72 @@ router.post('/project-items', auth, async (req, res) => {
     const projectName = projectRows[0].name;
     const results = [];
     const addedItems = [];
-    
+
     // Process each item assignment
     for (const assignment of item_assignments) {
-      const { item_id, allocated_quantity, status = 'pending' } = assignment;
-      
+      const { item_id, allocated_quantity, status = 'pending', source_location_id } = assignment;
+
       if (!item_id || !allocated_quantity) {
         continue; // Skip invalid assignments
       }
 
-      // Check item availability and get item name
-      const itemQuery = 'SELECT available_quantity, name FROM item WHERE id = ?';
-      const [itemResult] = await pool.execute(itemQuery, [item_id]);
-      
-      if (itemResult.length === 0) {
-        results.push({
-          item_id,
-          status: 'error',
-          error: 'Item not found'
-        });
-        continue;
+      // Check item availability - either from specific location or aggregate
+      let availableQuantity;
+      let itemName;
+      let locationName = null;
+
+      if (source_location_id) {
+        // Check availability at specific location
+        const locationQuery = `
+          SELECT
+            il.quantity - il.reserved_quantity - il.damaged_quantity - il.lost_quantity as available_quantity,
+            i.name as item_name,
+            l.name as location_name
+          FROM item_location il
+          JOIN item i ON il.item_id = i.id
+          JOIN location l ON il.location_id = l.id
+          WHERE il.item_id = ? AND il.location_id = ?
+        `;
+        const [locationResult] = await pool.execute(locationQuery, [item_id, source_location_id]);
+
+        if (locationResult.length === 0) {
+          results.push({
+            item_id,
+            status: 'error',
+            error: 'Item not found at the specified location'
+          });
+          continue;
+        }
+
+        availableQuantity = locationResult[0].available_quantity;
+        itemName = locationResult[0].item_name;
+        locationName = locationResult[0].location_name;
+      } else {
+        // Check aggregate availability from item table
+        const itemQuery = 'SELECT available_quantity, name FROM item WHERE id = ?';
+        const [itemResult] = await pool.execute(itemQuery, [item_id]);
+
+        if (itemResult.length === 0) {
+          results.push({
+            item_id,
+            status: 'error',
+            error: 'Item not found'
+          });
+          continue;
+        }
+
+        availableQuantity = itemResult[0].available_quantity;
+        itemName = itemResult[0].name;
       }
 
-      const availableQuantity = itemResult[0].available_quantity;
-      const itemName = itemResult[0].name;
       const totalNeeded = allocated_quantity * project_day_ids.length;
 
       if (availableQuantity < totalNeeded) {
+        const locationInfo = locationName ? ` at "${locationName}"` : '';
         results.push({
           item_id,
           status: 'error',
-          error: `Insufficient quantity. Available: ${availableQuantity}, Needed: ${totalNeeded}`
+          error: `Insufficient quantity${locationInfo}. Available: ${availableQuantity}, Needed: ${totalNeeded}`
         });
         continue;
       }
@@ -1122,61 +1180,77 @@ router.post('/project-items', auth, async (req, res) => {
         try {
           // Check if item assignment already exists
           const checkQuery = `
-            SELECT id, allocated_quantity 
-            FROM project_item 
+            SELECT id, allocated_quantity
+            FROM project_item
             WHERE project_day_id = ? AND item_id = ?
           `;
-          
+
           const [checkResult] = await pool.execute(checkQuery, [dayId, item_id]);
-          
+
           if (checkResult.length === 0) {
-            // Insert new assignment
+            // Insert new assignment with source_location_id
             const insertQuery = `
-              INSERT INTO project_item (project_day_id, item_id, allocated_quantity, damaged_quantity, lost_quantity, returned_quantity, status, created_at, updated_at)
-              VALUES (?, ?, ?, 0, 0, 0, ?, NOW(), NOW())
+              INSERT INTO project_item (project_day_id, item_id, source_location_id, allocated_quantity, damaged_quantity, lost_quantity, returned_quantity, status, created_at, updated_at)
+              VALUES (?, ?, ?, ?, 0, 0, 0, ?, NOW(), NOW())
             `;
-            
-            const [insertResult] = await pool.execute(insertQuery, [dayId, item_id, allocated_quantity, status]);
-            
-            // Note: Database trigger automatically handles inventory adjustment
-            
+
+            const [insertResult] = await pool.execute(insertQuery, [dayId, item_id, source_location_id || null, allocated_quantity, status]);
+
+            // If source_location_id is specified, update item_location reserved_quantity
+            if (source_location_id) {
+              await pool.execute(`
+                UPDATE item_location
+                SET reserved_quantity = reserved_quantity + ?, updated_at = NOW()
+                WHERE item_id = ? AND location_id = ?
+              `, [allocated_quantity, item_id, source_location_id]);
+            }
+
             results.push({
               id: insertResult.insertId,
               project_day_id: dayId,
               item_id,
+              source_location_id: source_location_id || null,
               allocated_quantity,
               status: 'added'
             });
-            
+
             // Track for logging
             if (!addedItems.some(i => i.item_id === item_id)) {
-              addedItems.push({ item_name: itemName, allocated_quantity });
+              addedItems.push({ item_id, item_name: itemName, allocated_quantity, location_name: locationName });
             }
           } else {
             // Update existing assignment
             const existingQuantity = checkResult[0].allocated_quantity;
             const newQuantity = existingQuantity + allocated_quantity;
-            
+
             const updateQuery = `
-              UPDATE project_item 
+              UPDATE project_item
               SET allocated_quantity = ?, updated_at = NOW()
               WHERE project_day_id = ? AND item_id = ?
             `;
-            
+
             await pool.execute(updateQuery, [newQuantity, dayId, item_id]);
-            
-            // Note: Database trigger automatically handles inventory adjustment
-            
+
+            // If source_location_id is specified, update item_location reserved_quantity
+            if (source_location_id) {
+              await pool.execute(`
+                UPDATE item_location
+                SET reserved_quantity = reserved_quantity + ?, updated_at = NOW()
+                WHERE item_id = ? AND location_id = ?
+              `, [allocated_quantity, item_id, source_location_id]);
+            }
+
             results.push({
               project_day_id: dayId,
               item_id,
+              source_location_id: source_location_id || null,
               allocated_quantity: newQuantity,
               status: 'updated'
             });
-            
+
             // Track for logging
             if (!addedItems.some(i => i.item_id === item_id)) {
-              addedItems.push({ item_name: itemName, allocated_quantity });
+              addedItems.push({ item_id, item_name: itemName, allocated_quantity, location_name: locationName });
             }
           }
         } catch (error) {
@@ -1193,7 +1267,14 @@ router.post('/project-items', auth, async (req, res) => {
     
     // Log the item addition activity
     if (addedItems.length > 0) {
-      const logDescription = `Added items: ${addedItems.map(i => `${i.item_name} (${i.allocated_quantity})`).join(', ')} to ${project_day_ids.length} project day(s)`;
+      // Calculate totals
+      const totalItems = addedItems.length;
+      const totalQuantity = addedItems.reduce((sum, i) => sum + (i.allocated_quantity * project_day_ids.length), 0);
+      const itemsList = addedItems.map(i => `"${i.item_name}" (${i.allocated_quantity} units${project_day_ids.length > 1 ? ' per day' : ''})`).join(', ');
+
+      const logDescription = project_day_ids.length > 1
+        ? `Reserved ${totalQuantity} total units across ${project_day_ids.length} days: ${itemsList}`
+        : `Reserved items for project day: ${itemsList}`;
 
       const logQuery = `
         INSERT INTO project_log (project_id, log_type, description, recorded_by, created_at)
@@ -1364,7 +1445,7 @@ router.put('/project-items/:id', auth, async (req, res) => {
         INSERT INTO project_log (project_id, project_day_id, log_type, description, recorded_by, created_at)
         VALUES (?, ?, 'activity', ?, ?, NOW())
       `;
-      const logDescription = `Project item "${currentItem.item_name}" updated: ${changes.join(', ')}`;
+      const logDescription = `Updated "${currentItem.item_name}" for ${projectDate}: ${changes.join(', ')}`;
       await pool.execute(logQuery, [currentItem.project_id, currentItem.project_day_id, logDescription, req.user?.id || null]);
 
       // Log to activity_log for inventory item view
@@ -1445,7 +1526,7 @@ router.delete('/project-items/:id', auth, async (req, res) => {
       INSERT INTO project_log (project_id, project_day_id, log_type, description, recorded_by, created_at)
       VALUES (?, NULL, 'activity', ?, ?, NOW())
     `;
-    const logDescription = `Project item "${item_name}" removed (${allocated_quantity} units returned to inventory)`;
+    const logDescription = `Removed "${item_name}" from project - ${allocated_quantity} units released back to available inventory`;
     await pool.execute(logQuery, [project_id, logDescription, req.user?.id || null]);
 
     // Log to activity_log for inventory item view
@@ -1835,6 +1916,299 @@ router.post('/add-items', async (req, res) => {
     
   } catch (error) {
     console.error('Error adding items to project:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+/**
+ * POST /api/project-detail/project-days/:id/complete
+ * Complete a project day with item reconciliation
+ * This endpoint:
+ * 1. Validates all items are reconciled (returned + damaged + lost = allocated)
+ * 2. Updates project_item records with final quantities
+ * 3. Marks the project_day as 'completed'
+ * 4. Triggers inventory adjustments (via database triggers):
+ *    - Moves items from reserved_quantity to actual inventory
+ *    - Returns items to available_quantity
+ *    - Updates damaged_quantity and lost_quantity
+ */
+router.post('/project-days/:id/complete', auth, async (req, res) => {
+  const { id } = req.params;
+  const { reconciliation } = req.body;
+
+  try {
+    // 1. Validate project day exists and is 'scheduled'
+    const [dayRows] = await pool.execute(`
+      SELECT
+        pd.id,
+        pd.project_id,
+        pd.project_date,
+        pd.status as day_status,
+        p.jo_number,
+        p.name as project_name
+      FROM project_day pd
+      JOIN project p ON pd.project_id = p.id
+      WHERE pd.id = ?
+    `, [id]);
+
+    if (dayRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project day not found'
+      });
+    }
+
+    const projectDay = dayRows[0];
+
+    if (projectDay.day_status === 'completed') {
+      return res.status(400).json({
+        success: false,
+        message: 'This project day has already been completed'
+      });
+    }
+
+    // 2. Get all project items for this day
+    const [itemRows] = await pool.execute(`
+      SELECT
+        pi.id as project_item_id,
+        pi.item_id,
+        pi.allocated_quantity,
+        pi.damaged_quantity,
+        pi.lost_quantity,
+        pi.returned_quantity,
+        i.name as item_name
+      FROM project_item pi
+      JOIN item i ON pi.item_id = i.id
+      WHERE pi.project_day_id = ?
+    `, [id]);
+
+    // 3. Validate reconciliation data
+    if (!reconciliation || !Array.isArray(reconciliation)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reconciliation data is required'
+      });
+    }
+
+    // Create a map of reconciliation data by project_item_id
+    const reconciliationMap = new Map();
+    for (const item of reconciliation) {
+      reconciliationMap.set(item.project_item_id, item);
+    }
+
+    // Validate that all items are included and quantities match
+    const validationErrors = [];
+    for (const item of itemRows) {
+      const recon = reconciliationMap.get(item.project_item_id);
+
+      if (!recon) {
+        validationErrors.push(`Missing reconciliation data for item "${item.item_name}"`);
+        continue;
+      }
+
+      const returned = parseInt(recon.returned_quantity) || 0;
+      const damaged = parseInt(recon.damaged_quantity) || 0;
+      const lost = parseInt(recon.lost_quantity) || 0;
+      const total = returned + damaged + lost;
+
+      if (total !== item.allocated_quantity) {
+        validationErrors.push(
+          `Item "${item.item_name}": returned (${returned}) + damaged (${damaged}) + lost (${lost}) = ${total}, but allocated was ${item.allocated_quantity}`
+        );
+      }
+
+      if (returned < 0 || damaged < 0 || lost < 0) {
+        validationErrors.push(`Item "${item.item_name}": quantities cannot be negative`);
+      }
+    }
+
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reconciliation validation failed',
+        errors: validationErrors
+      });
+    }
+
+    // 4. Begin transaction - update all project items and mark day as completed
+    const connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    try {
+      // First, update project_day status to 'completed'
+      // This must happen BEFORE updating project_items so the triggers know the day is completed
+      await connection.execute(`
+        UPDATE project_day
+        SET status = 'completed', completed_at = NOW(), completed_by = ?
+        WHERE id = ?
+      `, [req.user?.id || null, id]);
+
+      // Update each project_item with reconciliation values
+      // The database triggers will handle inventory adjustments
+      const updateResults = [];
+      for (const item of itemRows) {
+        const recon = reconciliationMap.get(item.project_item_id);
+        const returned = parseInt(recon.returned_quantity) || 0;
+        const damaged = parseInt(recon.damaged_quantity) || 0;
+        const lost = parseInt(recon.lost_quantity) || 0;
+
+        await connection.execute(`
+          UPDATE project_item
+          SET returned_quantity = ?,
+              damaged_quantity = ?,
+              lost_quantity = ?,
+              status = 'returned',
+              updated_at = NOW()
+          WHERE id = ?
+        `, [returned, damaged, lost, item.project_item_id]);
+
+        updateResults.push({
+          item_id: item.item_id,
+          item_name: item.item_name,
+          allocated: item.allocated_quantity,
+          returned,
+          damaged,
+          lost
+        });
+
+        // Log activity for each item
+        await connection.execute(`
+          INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
+          VALUES (?, 'item_reconciled', 'item', ?, ?, NOW())
+        `, [
+          req.user?.id || null,
+          item.item_id,
+          `Reconciled for "${projectDay.project_name}" (${new Date(projectDay.project_date).toLocaleDateString()}): ${item.allocated_quantity} allocated → ${returned} returned, ${damaged} damaged, ${lost} lost`
+        ]);
+      }
+
+      // Log project day completion
+      const formattedDate = new Date(projectDay.project_date).toLocaleDateString('en-US', {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+
+      const totalReturned = updateResults.reduce((sum, r) => sum + r.returned, 0);
+      const totalDamaged = updateResults.reduce((sum, r) => sum + r.damaged, 0);
+      const totalLost = updateResults.reduce((sum, r) => sum + r.lost, 0);
+
+      await connection.execute(`
+        INSERT INTO project_log (project_id, project_day_id, log_type, description, recorded_by, created_at)
+        VALUES (?, ?, 'status_change', ?, ?, NOW())
+      `, [
+        projectDay.project_id,
+        id,
+        `Completed project day ${formattedDate}. Items reconciled: ${itemRows.length} items, ${totalReturned} returned, ${totalDamaged} damaged, ${totalLost} lost`,
+        req.user?.id || null
+      ]);
+
+      await connection.commit();
+
+      res.json({
+        success: true,
+        message: 'Project day completed successfully',
+        data: {
+          project_day_id: id,
+          completed_at: new Date(),
+          completed_by: req.user?.id,
+          items_reconciled: updateResults.length,
+          summary: {
+            total_returned: totalReturned,
+            total_damaged: totalDamaged,
+            total_lost: totalLost
+          },
+          items: updateResults
+        }
+      });
+
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+
+  } catch (error) {
+    console.error('Error completing project day:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+/**
+ * GET /api/project-detail/project-days/:id/items-for-reconciliation
+ * Get all items for a project day for reconciliation
+ */
+router.get('/project-days/:id/items-for-reconciliation', auth, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Check if project day exists
+    const [dayRows] = await pool.execute(`
+      SELECT
+        pd.id,
+        pd.project_id,
+        pd.project_date,
+        pd.status as day_status,
+        p.jo_number,
+        p.name as project_name
+      FROM project_day pd
+      JOIN project p ON pd.project_id = p.id
+      WHERE pd.id = ?
+    `, [id]);
+
+    if (dayRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project day not found'
+      });
+    }
+
+    const projectDay = dayRows[0];
+
+    // Get all items with their current quantities
+    const [itemRows] = await pool.execute(`
+      SELECT
+        pi.id as project_item_id,
+        pi.item_id,
+        pi.allocated_quantity,
+        pi.damaged_quantity,
+        pi.lost_quantity,
+        pi.returned_quantity,
+        pi.status,
+        i.name as item_name,
+        i.type as item_type,
+        b.name as brand_name
+      FROM project_item pi
+      JOIN item i ON pi.item_id = i.id
+      LEFT JOIN brand b ON i.brand_id = b.id
+      WHERE pi.project_day_id = ?
+      ORDER BY i.name ASC
+    `, [id]);
+
+    res.json({
+      success: true,
+      data: {
+        project_day: {
+          id: projectDay.id,
+          project_date: projectDay.project_date,
+          day_status: projectDay.day_status,
+          project_name: projectDay.project_name,
+          jo_number: projectDay.jo_number
+        },
+        items: itemRows
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching items for reconciliation:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'

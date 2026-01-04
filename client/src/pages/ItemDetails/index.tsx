@@ -2,15 +2,21 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import ConfirmationModal from '@/components/ui/confirmation-modal'
 import Loader from '@/components/ui/Loader'
-import { 
-  getInventoryItem, 
-  getLocations, 
+import { useAuth } from '@/hooks/useAuth'
+import {
+  getInventoryItem,
+  getLocations,
   updateInventoryItem,
   updateItemQuantity,
   moveItemLocation,
   reportItemIssue,
   deleteInventoryItem,
-  getItemActivity
+  getItemActivity,
+  getItemLocations,
+  addDelivery,
+  adjustQuantity,
+  transferStock,
+  type ItemLocation
 } from '@/services/api/inventory'
 
 // Import separated components
@@ -22,8 +28,19 @@ import {
   UpdateQuantityModal,
   MoveLocationModal,
   ReportIssueModal,
-  ActivityHistoryCard
+  ActivityHistoryCard,
+  ReservationsCard,
+  AddDeliveryModal,
+  AdjustQuantityModal,
+  TransferStockModal,
+  LocationQuantitiesCard
 } from './components'
+import type { DeliveryFormState } from './components/AddDeliveryModal'
+import type { AdjustmentFormState } from './components/AdjustQuantityModal'
+import type { TransferFormState } from './components/TransferStockModal'
+
+// Status type matching the database ENUM
+type ItemStatus = 'in stock' | 'out of stock' | 'low stock' | 'inactive'
 
 // API response type - matches what the backend returns
 interface ApiInventoryItem {
@@ -37,9 +54,10 @@ interface ApiInventoryItem {
   damaged_quantity: number;
   lost_quantity: number;
   available_quantity: number;
+  reserved_quantity: number;
   warehouse_location_id: number | null;
   warehouse_location_name: string | null;
-  status: string | null;
+  status: ItemStatus | null;
   created_at: string;
   updated_at: string;
 }
@@ -56,49 +74,89 @@ interface ActivityItem {
 const ItemDetails = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [item, setItem] = useState<ApiInventoryItem | null>(null)
   const [activities, setActivities] = useState<ActivityItem[]>([])
+  const [itemLocations, setItemLocations] = useState<ItemLocation[]>([])
+  const [totalDelivered, setTotalDelivered] = useState<number>(0)
   const [loading, setLoading] = useState(true)
+  const [locationsLoading, setLocationsLoading] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [errorModalOpen, setErrorModalOpen] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
-  
+
+  // Check if user is admin
+  const isAdmin = user?.positionName === 'Administrator' || user?.permissions?.canManageInventory
+
   // Quick Action Modals
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [updateQuantityModalOpen, setUpdateQuantityModalOpen] = useState(false)
   const [moveLocationModalOpen, setMoveLocationModalOpen] = useState(false)
   const [reportIssueModalOpen, setReportIssueModalOpen] = useState(false)
-  
+
+  // Multi-warehouse modals
+  const [addDeliveryModalOpen, setAddDeliveryModalOpen] = useState(false)
+  const [adjustQuantityModalOpen, setAdjustQuantityModalOpen] = useState(false)
+  const [transferStockModalOpen, setTransferStockModalOpen] = useState(false)
+
   // Form states
-  const [editForm, setEditForm] = useState({
+  const [editForm, setEditForm] = useState<{
+    name: string
+    description: string
+    type: 'product' | 'material'
+    brand_id: number | null
+    warehouse_location_id: number | null
+    isInactive: boolean
+  }>({
     name: '',
     description: '',
-    type: 'product' as 'product' | 'material',
-    brand_id: null as number | null,
-    warehouse_location_id: null as number | null,
-    status: ''
+    type: 'product',
+    brand_id: null,
+    warehouse_location_id: null,
+    isInactive: false
   })
-  
+
   const [quantityForm, setQuantityForm] = useState({
     delivered_quantity: 0
   })
-  
+
   const [locationForm, setLocationForm] = useState({
     warehouse_location_id: null as number | null
   })
-  
+
   const [issueForm, setIssueForm] = useState({
     issue_type: 'damage' as 'damage' | 'loss',
     quantity: 1,
     description: ''
   })
-  
+
+  // Multi-warehouse form states
+  const [deliveryForm, setDeliveryForm] = useState<DeliveryFormState>({
+    location_id: null,
+    quantity: 0,
+    reference_number: '',
+    notes: ''
+  })
+
+  const [adjustmentForm, setAdjustmentForm] = useState<AdjustmentFormState>({
+    location_id: null,
+    quantity: 0,
+    reason: ''
+  })
+
+  const [transferForm, setTransferForm] = useState<TransferFormState>({
+    from_location_id: null,
+    to_location_id: null,
+    quantity: 0,
+    notes: ''
+  })
+
   const [saving, setSaving] = useState(false)
   const [availableLocations, setAvailableLocations] = useState<any[]>([])
 
   // Discard changes confirmation modal
   const [discardModalOpen, setDiscardModalOpen] = useState(false)
-  const [pendingCloseModal, setPendingCloseModal] = useState<'edit' | 'quantity' | 'location' | 'issue' | null>(null)
+  const [pendingCloseModal, setPendingCloseModal] = useState<'edit' | 'quantity' | 'location' | 'issue' | 'delivery' | 'adjustment' | 'transfer' | null>(null)
 
   const fetchItem = async () => {
     if (!id) return
@@ -122,7 +180,7 @@ const ItemDetails = () => {
 
   const fetchActivities = async () => {
     if (!id) return
-    
+
     try {
       const response = await getItemActivity(id)
       if (response.success) {
@@ -133,9 +191,39 @@ const ItemDetails = () => {
     }
   }
 
+  const fetchItemLocations = async () => {
+    if (!id) return
+
+    try {
+      setLocationsLoading(true)
+      const response = await getItemLocations(id)
+      if (response.success) {
+        setItemLocations(response.data.locations)
+        setTotalDelivered(response.data.item.total_delivered || 0)
+      }
+    } catch (error) {
+      console.error('Error fetching item locations:', error)
+    } finally {
+      setLocationsLoading(false)
+    }
+  }
+
+  const fetchAvailableLocations = async () => {
+    try {
+      const response = await getLocations()
+      if (response.success) {
+        setAvailableLocations(response.data.locations)
+      }
+    } catch (error) {
+      console.error('Error fetching locations:', error)
+    }
+  }
+
   useEffect(() => {
     fetchItem()
     fetchActivities()
+    fetchItemLocations()
+    fetchAvailableLocations()
   }, [id])
 
   // Populate forms when item loads
@@ -147,7 +235,7 @@ const ItemDetails = () => {
         type: item.type,
         brand_id: item.brand_id,
         warehouse_location_id: item.warehouse_location_id,
-        status: item.status || ''
+        isInactive: item.status === 'inactive'
       })
       
       setQuantityForm({
@@ -167,7 +255,7 @@ const ItemDetails = () => {
       editForm.name !== item.name ||
       editForm.description !== (item.description || '') ||
       editForm.type !== item.type ||
-      editForm.status !== (item.status || '')
+      editForm.isInactive !== (item.status === 'inactive')
     )
   }
 
@@ -197,7 +285,7 @@ const ItemDetails = () => {
         type: item.type,
         brand_id: item.brand_id,
         warehouse_location_id: item.warehouse_location_id,
-        status: item.status || ''
+        isInactive: item.status === 'inactive'
       })
     }
   }
@@ -216,6 +304,31 @@ const ItemDetails = () => {
 
   const resetIssueForm = () => {
     setIssueForm({ issue_type: 'damage', quantity: 1, description: '' })
+  }
+
+  const resetDeliveryForm = () => {
+    setDeliveryForm({ location_id: null, quantity: 0, reference_number: '', notes: '' })
+  }
+
+  const resetAdjustmentForm = () => {
+    setAdjustmentForm({ location_id: null, quantity: 0, reason: '' })
+  }
+
+  const resetTransferForm = () => {
+    setTransferForm({ from_location_id: null, to_location_id: null, quantity: 0, notes: '' })
+  }
+
+  // Check if multi-warehouse forms have unsaved changes
+  const hasDeliveryChanges = () => {
+    return deliveryForm.location_id !== null || deliveryForm.quantity > 0 || deliveryForm.reference_number !== '' || deliveryForm.notes !== ''
+  }
+
+  const hasAdjustmentChanges = () => {
+    return adjustmentForm.location_id !== null || adjustmentForm.quantity !== 0 || adjustmentForm.reason !== ''
+  }
+
+  const hasTransferChanges = () => {
+    return transferForm.from_location_id !== null || transferForm.to_location_id !== null || transferForm.quantity > 0
   }
 
   // Handle modal close with unsaved changes check
@@ -255,6 +368,33 @@ const ItemDetails = () => {
     }
   }
 
+  const handleCloseDeliveryModal = () => {
+    if (hasDeliveryChanges()) {
+      setPendingCloseModal('delivery')
+      setDiscardModalOpen(true)
+    } else {
+      setAddDeliveryModalOpen(false)
+    }
+  }
+
+  const handleCloseAdjustmentModal = () => {
+    if (hasAdjustmentChanges()) {
+      setPendingCloseModal('adjustment')
+      setDiscardModalOpen(true)
+    } else {
+      setAdjustQuantityModalOpen(false)
+    }
+  }
+
+  const handleCloseTransferModal = () => {
+    if (hasTransferChanges()) {
+      setPendingCloseModal('transfer')
+      setDiscardModalOpen(true)
+    } else {
+      setTransferStockModalOpen(false)
+    }
+  }
+
   // Confirm discard changes
   const handleDiscardChanges = () => {
     switch (pendingCloseModal) {
@@ -273,6 +413,18 @@ const ItemDetails = () => {
       case 'issue':
         resetIssueForm()
         setReportIssueModalOpen(false)
+        break
+      case 'delivery':
+        resetDeliveryForm()
+        setAddDeliveryModalOpen(false)
+        break
+      case 'adjustment':
+        resetAdjustmentForm()
+        setAdjustQuantityModalOpen(false)
+        break
+      case 'transfer':
+        resetTransferForm()
+        setTransferStockModalOpen(false)
         break
     }
     setDiscardModalOpen(false)
@@ -303,6 +455,21 @@ const ItemDetails = () => {
     setReportIssueModalOpen(true)
   }
 
+  const handleAddDelivery = () => {
+    resetDeliveryForm()
+    setAddDeliveryModalOpen(true)
+  }
+
+  const handleAdjustQuantity = () => {
+    resetAdjustmentForm()
+    setAdjustQuantityModalOpen(true)
+  }
+
+  const handleTransferStock = () => {
+    resetTransferForm()
+    setTransferStockModalOpen(true)
+  }
+
   const handleEditSubmit = async () => {
     if (!id) return
 
@@ -314,7 +481,14 @@ const ItemDetails = () => {
 
     try {
       setSaving(true)
-      const response = await updateInventoryItem(id, editForm)
+      // Transform editForm: convert isInactive boolean to status value
+      // If inactive, set status to 'inactive'. Otherwise, set to null to let DB trigger recalculate
+      const { isInactive, ...formData } = editForm
+      const submitData = {
+        ...formData,
+        status: isInactive ? 'inactive' : null
+      }
+      const response = await updateInventoryItem(id, submitData as any)
       if (response.success) {
         await fetchItem()
         await fetchActivities()
@@ -419,9 +593,98 @@ const ItemDetails = () => {
     }
   }
 
+  const handleDeliverySubmit = async () => {
+    if (!id || !deliveryForm.location_id || deliveryForm.quantity <= 0) return
+
+    try {
+      setSaving(true)
+      const response = await addDelivery(id, {
+        location_id: deliveryForm.location_id,
+        quantity: deliveryForm.quantity,
+        reference_number: deliveryForm.reference_number || undefined,
+        notes: deliveryForm.notes || undefined
+      })
+      if (response.success) {
+        await fetchItem()
+        await fetchActivities()
+        await fetchItemLocations()
+        setAddDeliveryModalOpen(false)
+        resetDeliveryForm()
+      } else {
+        setErrorMessage(response.error || 'Failed to add delivery')
+        setErrorModalOpen(true)
+      }
+    } catch (error: any) {
+      console.error('Error adding delivery:', error)
+      setErrorMessage(error?.response?.data?.error || 'Failed to add delivery')
+      setErrorModalOpen(true)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleAdjustmentSubmit = async () => {
+    if (!id || !adjustmentForm.location_id || adjustmentForm.quantity === 0 || adjustmentForm.reason.length < 5) return
+
+    try {
+      setSaving(true)
+      const response = await adjustQuantity(id, {
+        location_id: adjustmentForm.location_id,
+        quantity: adjustmentForm.quantity,
+        reason: adjustmentForm.reason
+      })
+      if (response.success) {
+        await fetchItem()
+        await fetchActivities()
+        await fetchItemLocations()
+        setAdjustQuantityModalOpen(false)
+        resetAdjustmentForm()
+      } else {
+        setErrorMessage(response.error || 'Failed to adjust quantity')
+        setErrorModalOpen(true)
+      }
+    } catch (error: any) {
+      console.error('Error adjusting quantity:', error)
+      setErrorMessage(error?.response?.data?.error || 'Failed to adjust quantity')
+      setErrorModalOpen(true)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleTransferSubmit = async () => {
+    if (!id || !transferForm.from_location_id || !transferForm.to_location_id || transferForm.quantity <= 0) return
+
+    try {
+      setSaving(true)
+      const response = await transferStock(id, {
+        from_location_id: transferForm.from_location_id,
+        to_location_id: transferForm.to_location_id,
+        quantity: transferForm.quantity,
+        notes: transferForm.notes || undefined
+      })
+      if (response.success) {
+        await fetchItem()
+        await fetchActivities()
+        await fetchItemLocations()
+        setTransferStockModalOpen(false)
+        resetTransferForm()
+      } else {
+        setErrorMessage(response.error || 'Failed to transfer stock')
+        setErrorModalOpen(true)
+      }
+    } catch (error: any) {
+      console.error('Error transferring stock:', error)
+      setErrorMessage(error?.response?.data?.error || 'Failed to transfer stock')
+      setErrorModalOpen(true)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleDeleteSubmit = async () => {
     if (!id) return
-    
+
     try {
       setSaving(true)
       const response = await deleteInventoryItem(id)
@@ -487,13 +750,31 @@ const ItemDetails = () => {
         {/* Item Information Cards */}
         <ItemInfoCards item={item} />
 
+        {/* Stock by Location Card */}
+        <div className="mt-6">
+          <LocationQuantitiesCard
+            locations={itemLocations}
+            loading={locationsLoading}
+            totalDelivered={totalDelivered}
+          />
+        </div>
+
+        {/* Reservations Card - only shown if there are reservations */}
+        <ReservationsCard
+          itemId={item.id}
+          reservedQuantity={item.reserved_quantity || 0}
+        />
+
         {/* Action Buttons */}
         <ActionButtons
           onEdit={handleEdit}
-          onUpdateQuantity={handleUpdateQuantity}
           onMoveLocation={handleMoveLocation}
           onReportIssue={handleReportIssue}
           onDelete={() => setDeleteModalOpen(true)}
+          onAddDelivery={handleAddDelivery}
+          onAdjustQuantity={handleAdjustQuantity}
+          onTransferStock={handleTransferStock}
+          isAdmin={isAdmin}
         />
 
         {/* Activity History */}
@@ -506,6 +787,7 @@ const ItemDetails = () => {
         setEditForm={setEditForm}
         onSubmit={handleEditSubmit}
         saving={saving}
+        currentStatus={item?.status || null}
       />
 
       <UpdateQuantityModal
@@ -535,6 +817,39 @@ const ItemDetails = () => {
         onSubmit={handleIssueSubmit}
         saving={saving}
         maxQuantity={item?.available_quantity || 0}
+      />
+
+      {/* Multi-warehouse Modals */}
+      <AddDeliveryModal
+        isOpen={addDeliveryModalOpen}
+        onClose={handleCloseDeliveryModal}
+        deliveryForm={deliveryForm}
+        setDeliveryForm={setDeliveryForm}
+        onSubmit={handleDeliverySubmit}
+        saving={saving}
+        availableLocations={availableLocations}
+      />
+
+      <AdjustQuantityModal
+        isOpen={adjustQuantityModalOpen}
+        onClose={handleCloseAdjustmentModal}
+        adjustmentForm={adjustmentForm}
+        setAdjustmentForm={setAdjustmentForm}
+        onSubmit={handleAdjustmentSubmit}
+        saving={saving}
+        availableLocations={availableLocations}
+        itemLocations={itemLocations}
+      />
+
+      <TransferStockModal
+        isOpen={transferStockModalOpen}
+        onClose={handleCloseTransferModal}
+        transferForm={transferForm}
+        setTransferForm={setTransferForm}
+        onSubmit={handleTransferSubmit}
+        saving={saving}
+        availableLocations={availableLocations}
+        itemLocations={itemLocations}
       />
 
       {/* Discard Changes Confirmation Modal */}

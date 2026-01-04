@@ -94,10 +94,21 @@ const schemas = {
       'number.min': 'Available quantity cannot be negative',
       'number.integer': 'Available quantity must be a whole number'
     }),
-    warehouse_location_id: Joi.number().integer().positive().allow(null).messages({
-      'number.positive': 'Warehouse location ID must be a positive number'
-    }),
-    status: Joi.string().max(50).allow('', null).default(null)
+    // Location is required when delivered_quantity > 0
+    warehouse_location_id: Joi.number().integer().positive().allow(null)
+      .when('delivered_quantity', {
+        is: Joi.number().greater(0),
+        then: Joi.number().integer().positive().required().messages({
+          'any.required': 'Location is required when adding initial quantity',
+          'number.positive': 'Warehouse location ID must be a positive number'
+        }),
+        otherwise: Joi.number().integer().positive().allow(null).messages({
+          'number.positive': 'Warehouse location ID must be a positive number'
+        })
+      }),
+    status: Joi.string().valid('in stock', 'out of stock', 'low stock', 'inactive').allow('', null).default(null).messages({
+      'any.only': 'Status must be one of: in stock, out of stock, low stock, inactive'
+    })
   }),
 
   updateInventoryItem: Joi.object({
@@ -110,7 +121,9 @@ const schemas = {
     lost_quantity: Joi.number().integer().min(0),
     available_quantity: Joi.number().integer().min(0),
     warehouse_location_id: Joi.number().integer().positive().allow(null),
-    status: Joi.string().max(50).allow('', null)
+    status: Joi.string().valid('in stock', 'out of stock', 'low stock', 'inactive').allow('', null).messages({
+      'any.only': 'Status must be one of: in stock, out of stock, low stock, inactive'
+    })
   }),
 
   // Query parameter validation

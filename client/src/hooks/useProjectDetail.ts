@@ -225,26 +225,52 @@ export const useUpdateProjectItem = () => {
 
 export const useDeleteProjectItem = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: projectDetailMutationAPI.deleteProjectItem,
     onSuccess: (_, variables) => {
       // Invalidate both project detail and available items
       const joNumber = variables.joNumber;
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         queryKey: ['project-detail', 'detail', joNumber],
         exact: false
       });
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         queryKey: ['project-detail', 'available-items', joNumber],
         exact: false
       });
       // Also invalidate inventory queries to update stock everywhere
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         queryKey: ['inventory'],
         exact: false
       });
     },
+  });
+};
+
+export const useCompleteProjectDay = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: projectDetailMutationAPI.completeProjectDay,
+    onSuccess: () => {
+      // Invalidate all project detail queries (day status changed)
+      queryClient.invalidateQueries({
+        queryKey: ['project-detail'],
+        exact: false
+      });
+      // Invalidate all inventory queries (reserved -> available/damaged/lost)
+      queryClient.invalidateQueries({
+        queryKey: ['inventory'],
+        exact: false
+      });
+    },
+  });
+};
+
+export const useGetItemsForReconciliation = () => {
+  return useMutation({
+    mutationFn: projectDetailMutationAPI.getItemsForReconciliation,
   });
 };
 
@@ -263,4 +289,6 @@ export default {
   useAddProjectItems,
   useUpdateProjectItem,
   useDeleteProjectItem,
+  useCompleteProjectDay,
+  useGetItemsForReconciliation,
 };

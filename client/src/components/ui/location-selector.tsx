@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { MapPin, Plus, Search, Check, X, Building, Warehouse, Home, Loader2 } from 'lucide-react'
 import { getLocations } from '@/utils/projectData'
 import { useCreateLocation } from '@/hooks/useProjectDetail'
+import { useQueryClient } from '@tanstack/react-query'
 
 interface LocationSelectorProps {
   value?: number | null // location_id
@@ -39,12 +40,24 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
+  // Query client to invalidate caches
+  const queryClient = useQueryClient()
+
   // Use API to create location
   const createLocationMutation = useCreateLocation()
 
+  // Store newly created location locally until cache refreshes
+  const [newlyCreatedLocation, setNewlyCreatedLocation] = useState<any>(null)
+
   // Use provided locations or fallback to hardcoded data
-  const locations = locationsProp || getLocations()
-  const selectedLocation = value ? locations.find(l => l.id === value) : null
+  const baseLocations = locationsProp || getLocations()
+
+  // Merge newly created location with existing locations if not already present
+  const locations = newlyCreatedLocation && !baseLocations.find((l: any) => l.id === newlyCreatedLocation.id)
+    ? [newlyCreatedLocation, ...baseLocations]
+    : baseLocations
+
+  const selectedLocation = value ? locations.find((l: any) => l.id === value) : null
 
   // Filter locations based on search query
   const filteredLocations = locations.filter(location => {
@@ -147,6 +160,12 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
         province: newLocation.province,
         region: newLocation.region
       })
+
+      // Store the newly created location locally so it shows immediately
+      setNewlyCreatedLocation(createdLocation)
+
+      // Invalidate inventory locations cache so it refreshes
+      queryClient.invalidateQueries({ queryKey: ['inventory', 'locations'] })
 
       // Select the newly created location and close modal
       onChange(createdLocation.id, createdLocation)

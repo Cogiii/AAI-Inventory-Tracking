@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
-import { Package, Wrench, HardHat, ChevronRight, MapPin, AlertTriangle, Calendar } from 'lucide-react'
+import { Package, Wrench, HardHat, ChevronRight, MapPin, AlertTriangle, Calendar, Clock } from 'lucide-react'
 import { useInventoryItems } from '@/hooks/useInventory'
 import Loader from '@/components/ui/Loader'
 import type { FilterState } from '@/types'
@@ -90,20 +90,33 @@ const InventoryTable = ({ filters }: InventoryTableProps) => {
     }
   }
 
-  const getStatusColor = (availableQuantity: number) => {
-    if (availableQuantity === 0) {
-      return 'bg-red-100 text-red-800 border-red-200'
-    } else if (availableQuantity <= 10) {
-      return 'bg-yellow-100 text-yellow-800 border-yellow-200'
-    } else {
-      return 'bg-green-100 text-green-800 border-green-200'
+  // Status styling based on the database status field (auto-updated by triggers)
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'out of stock':
+        return 'bg-red-100 text-red-800 border-red-200'
+      case 'low stock':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200'
+      case 'inactive':
+        return 'bg-gray-100 text-gray-800 border-gray-200'
+      case 'in stock':
+      default:
+        return 'bg-green-100 text-green-800 border-green-200'
     }
   }
 
-  const getStatusText = (availableQuantity: number) => {
-    if (availableQuantity === 0) return 'Out of Stock'
-    if (availableQuantity <= 10) return 'Low Stock'
-    return 'In Stock'
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'out of stock':
+        return 'Out of Stock'
+      case 'low stock':
+        return 'Low Stock'
+      case 'inactive':
+        return 'Inactive'
+      case 'in stock':
+      default:
+        return 'In Stock'
+    }
   }
 
   const formatDate = (dateString: string) => {
@@ -202,6 +215,15 @@ const InventoryTable = ({ filters }: InventoryTableProps) => {
                         <span className="text-gray-600">Available:</span>
                         <span className="font-semibold text-gray-900">{item.available_quantity}</span>
                       </div>
+                      {item.reserved_quantity > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-orange-600 flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            Reserved:
+                          </span>
+                          <span className="font-semibold text-orange-600">{item.reserved_quantity}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between">
                         <span className="text-gray-600">Delivered:</span>
                         <span className="text-gray-700">{item.delivered_quantity}</span>
@@ -235,11 +257,11 @@ const InventoryTable = ({ filters }: InventoryTableProps) => {
 
                   {/* Status */}
                   <td className="py-4 px-4">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(item.available_quantity)}`}>
-                      {item.available_quantity <= 10 && item.available_quantity > 0 && (
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(item.status)}`}>
+                      {item.status === 'low stock' && (
                         <AlertTriangle className="h-3 w-3 mr-1" />
                       )}
-                      {getStatusText(item.available_quantity)}
+                      {getStatusText(item.status)}
                     </span>
                   </td>
 

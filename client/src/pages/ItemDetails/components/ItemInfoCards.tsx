@@ -1,5 +1,5 @@
 import { Card, CardContent } from '@/components/ui/card'
-import { Package, MapPin, AlertTriangle, CheckCircle, XCircle, TrendingUp, Minus } from 'lucide-react'
+import { Package, MapPin, AlertTriangle, CheckCircle, XCircle, TrendingUp, Minus, Clock } from 'lucide-react'
 
 // API response type - matches what the backend returns
 interface ApiInventoryItem {
@@ -13,6 +13,7 @@ interface ApiInventoryItem {
   damaged_quantity: number;
   lost_quantity: number;
   available_quantity: number;
+  reserved_quantity?: number;
   warehouse_location_id: number | null;
   warehouse_location_name: string | null;
   status: string | null;
@@ -73,14 +74,14 @@ const ItemInfoCards = ({ item }: ItemInfoCardsProps) => {
   return (
     <div className="mb-8">
       {/* Main Statistics Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         {/* Delivered Quantity */}
         <Card className="hover:shadow-md transition-shadow bg-white">
           <CardContent className="p-6">
             <div className="flex items-center space-x-4">
               <Package className="h-6 w-6 text-gray-custom" />
               <div>
-                <p className="text-md font-bold text-gray-700">Total Delivered</p>
+                <p className="text-md font-bold text-gray-700">Delivered</p>
                 <p className="text-sm font-medium text-gray-500">{item.delivered_quantity}</p>
               </div>
             </div>
@@ -91,10 +92,25 @@ const ItemInfoCards = ({ item }: ItemInfoCardsProps) => {
         <Card className="hover:shadow-md transition-shadow bg-white">
           <CardContent className="p-6">
             <div className="flex items-center space-x-4">
-              <CheckCircle className="h-6 w-6 text-gray-custom" />
+              <CheckCircle className="h-6 w-6 text-green-600" />
               <div>
                 <p className="text-md font-bold text-gray-700">Available</p>
                 <p className="text-sm font-medium text-gray-500">{item.available_quantity}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Reserved Quantity */}
+        <Card className={`hover:shadow-md transition-shadow ${(item.reserved_quantity || 0) > 0 ? 'bg-orange-50 border-orange-200' : 'bg-white'}`}>
+          <CardContent className="p-6">
+            <div className="flex items-center space-x-4">
+              <Clock className={`h-6 w-6 ${(item.reserved_quantity || 0) > 0 ? 'text-orange-500' : 'text-gray-custom'}`} />
+              <div>
+                <p className="text-md font-bold text-gray-700">Reserved</p>
+                <p className={`text-sm font-medium ${(item.reserved_quantity || 0) > 0 ? 'text-orange-600' : 'text-gray-500'}`}>
+                  {item.reserved_quantity || 0}
+                </p>
               </div>
             </div>
           </CardContent>

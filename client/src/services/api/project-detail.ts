@@ -42,10 +42,55 @@ export interface ProjectDay {
   location_name: string | null;
   location_type: 'warehouse' | 'project_site' | 'office' | null;
   full_address: string | null;
+  day_status: 'scheduled' | 'completed' | null;
+  completed_at: string | null;
+  completed_by: number | null;
+  completed_by_name: string | null;
   created_at: string;
   updated_at: string | null;
   items: ProjectItem[];
   personnel: ProjectPersonnel[];
+}
+
+// Reconciliation interfaces for completing project days
+export interface ItemReconciliation {
+  project_item_id: number;
+  returned_quantity: number;
+  damaged_quantity: number;
+  lost_quantity: number;
+}
+
+export interface ReconciliationItem {
+  project_item_id: number;
+  item_id: number;
+  item_name: string;
+  item_type: 'product' | 'material';
+  brand_name: string | null;
+  allocated_quantity: number;
+  damaged_quantity: number;
+  lost_quantity: number;
+  returned_quantity: number;
+  status: string;
+}
+
+export interface CompleteProjectDayResponse {
+  project_day_id: number;
+  completed_at: string;
+  completed_by: number;
+  items_reconciled: number;
+  summary: {
+    total_returned: number;
+    total_damaged: number;
+    total_lost: number;
+  };
+  items: Array<{
+    item_id: number;
+    item_name: string;
+    allocated: number;
+    returned: number;
+    damaged: number;
+    lost: number;
+  }>;
 }
 
 export interface ProjectItem {
@@ -156,6 +201,25 @@ export const projectDetailAPI = {
 
 // Mutation API functions
 export const projectDetailMutationAPI = {
+  // Get items for reconciliation when completing a project day
+  getItemsForReconciliation: async (projectDayId: number): Promise<ReconciliationItem[]> => {
+    const response = await api.get(`/project-detail/project-days/${projectDayId}/items-for-reconciliation`);
+    return response.data.data;
+  },
+
+  // Complete a project day with item reconciliation
+  completeProjectDay: async (data: {
+    projectDayId: number;
+    reconciliation: ItemReconciliation[];
+    recorded_by?: number;
+  }): Promise<CompleteProjectDayResponse> => {
+    const response = await api.post(`/project-detail/project-days/${data.projectDayId}/complete`, {
+      reconciliation: data.reconciliation,
+      recorded_by: data.recorded_by
+    });
+    return response.data.data;
+  },
+
   // Create new personnel
   createPersonnel: async (data: {
     name: string;

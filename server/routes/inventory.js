@@ -123,21 +123,21 @@ router.get('/', auth, validate(schemas.paginationQuery, 'query'), async (req, re
       queryParams.push(location);
     }
 
-    // Apply status filter
+    // Apply status filter - now using the actual status field from database
+    // Status is auto-updated by database triggers based on available_quantity
     if (status && status !== 'all') {
       switch (status) {
         case 'low_stock':
-          whereClause += ' AND i.available_quantity > 0 AND i.available_quantity <= 10';
+          whereClause += " AND i.status = 'low stock'";
           break;
         case 'out_of_stock':
-          whereClause += ' AND i.available_quantity = 0';
+          whereClause += " AND i.status = 'out of stock'";
           break;
         case 'active':
-          whereClause += ' AND i.available_quantity > 10';
+          whereClause += " AND i.status = 'in stock'";
           break;
         case 'inactive':
-          whereClause += ' AND i.status = ?';
-          queryParams.push('inactive');
+          whereClause += " AND i.status = 'inactive'";
           break;
       }
     }
@@ -238,9 +238,10 @@ router.get('/stats', auth, async (req, res) => {
     );
 
     const [quantitiesResult] = await pool.execute(
-      `SELECT 
+      `SELECT
         SUM(delivered_quantity) as total_delivered,
         SUM(available_quantity) as total_available,
+        SUM(reserved_quantity) as total_reserved,
         SUM(damaged_quantity) as total_damaged,
         SUM(lost_quantity) as total_lost
        FROM item`
@@ -363,21 +364,21 @@ router.get('/export/excel', auth, validate(schemas.paginationQuery, 'query'), as
       queryParams.push(location);
     }
 
-    // Apply status filter
+    // Apply status filter - now using the actual status field from database
+    // Status is auto-updated by database triggers based on available_quantity
     if (status && status !== 'all') {
       switch (status) {
         case 'low_stock':
-          whereClause += ' AND i.available_quantity > 0 AND i.available_quantity <= 10';
+          whereClause += " AND i.status = 'low stock'";
           break;
         case 'out_of_stock':
-          whereClause += ' AND i.available_quantity = 0';
+          whereClause += " AND i.status = 'out of stock'";
           break;
         case 'active':
-          whereClause += ' AND i.available_quantity > 10';
+          whereClause += " AND i.status = 'in stock'";
           break;
         case 'inactive':
-          whereClause += ' AND i.status = ?';
-          queryParams.push('inactive');
+          whereClause += " AND i.status = 'inactive'";
           break;
       }
     }
@@ -531,18 +532,28 @@ router.post('/', auth, requirePermission('canAddInventory'), validate(schemas.cr
       status
     } = req.body;
 
+    const initialQuantity = delivered_quantity || 0;
+
+    // Validate: if quantity > 0, location is required
+    if (initialQuantity > 0 && !warehouse_location_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Location is required when adding initial quantity'
+      });
+    }
+
     // Insert new inventory item
     const insertQuery = `
       INSERT INTO item (
-        type, 
-        brand_id, 
-        name, 
-        description, 
-        delivered_quantity, 
-        damaged_quantity, 
-        lost_quantity, 
-        available_quantity, 
-        warehouse_location_id, 
+        type,
+        brand_id,
+        name,
+        description,
+        delivered_quantity,
+        damaged_quantity,
+        lost_quantity,
+        available_quantity,
+        warehouse_location_id,
         status,
         created_at,
         updated_at
@@ -554,7 +565,7 @@ router.post('/', auth, requirePermission('canAddInventory'), validate(schemas.cr
       brand_id || null,
       name,
       description || null,
-      delivered_quantity || 0,
+      initialQuantity,
       damaged_quantity || 0,
       lost_quantity || 0,
       available_quantity || 0,
@@ -562,9 +573,32 @@ router.post('/', auth, requirePermission('canAddInventory'), validate(schemas.cr
       status || null
     ]);
 
+    const itemId = result.insertId;
+
+    // If initial quantity > 0 and location provided, create item_location and delivery_log entries
+    if (initialQuantity > 0 && warehouse_location_id) {
+      // Create item_location record
+      await pool.execute(`
+        INSERT INTO item_location (item_id, location_id, quantity, reserved_quantity, damaged_quantity, lost_quantity, created_at)
+        VALUES (?, ?, ?, 0, 0, 0, NOW())
+      `, [itemId, warehouse_location_id, initialQuantity]);
+
+      // Create delivery_log entry for audit trail
+      await pool.execute(`
+        INSERT INTO delivery_log (item_id, location_id, quantity, type, notes, performed_by, created_at)
+        VALUES (?, ?, ?, 'delivery', ?, ?, NOW())
+      `, [itemId, warehouse_location_id, initialQuantity, 'Initial stock on item creation', req.user.id]);
+
+      // Create inventory_log entry
+      await pool.execute(`
+        INSERT INTO inventory_log (item_id, log_type, quantity, to_location_id, handled_by, remarks, created_at)
+        VALUES (?, 'in', ?, ?, ?, ?, NOW())
+      `, [itemId, initialQuantity, warehouse_location_id, req.user.id, 'Initial stock added on item creation']);
+    }
+
     // Fetch the created item with related data
     const fetchQuery = `
-      SELECT 
+      SELECT
         i.*,
         b.name as brand_name,
         l.name as warehouse_location_name
@@ -574,13 +608,17 @@ router.post('/', auth, requirePermission('canAddInventory'), validate(schemas.cr
       WHERE i.id = ?
     `;
 
-    const [rows] = await pool.execute(fetchQuery, [result.insertId]);
+    const [rows] = await pool.execute(fetchQuery, [itemId]);
 
     // Log activity for item creation
+    const activityDescription = initialQuantity > 0
+      ? `Created item "${name}" with initial quantity of ${initialQuantity}`
+      : `Created item "${name}"`;
+
     await pool.execute(`
       INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
       VALUES (?, 'created', 'item', ?, ?, NOW())
-    `, [req.user?.id, result.insertId, `Created item "${name}"`]);
+    `, [req.user?.id, itemId, activityDescription]);
 
     res.status(201).json({
       success: true,
@@ -607,8 +645,17 @@ router.put('/:id', auth, requirePermission('canEditInventory'), validate(schemas
     const { id } = req.params;
     const updates = req.body;
 
-    // Check if item exists
-    const [existingRows] = await pool.execute('SELECT id FROM item WHERE id = ?', [id]);
+    // Fetch current item with related data BEFORE updating (for change tracking)
+    const [existingRows] = await pool.execute(`
+      SELECT
+        i.*,
+        b.name as brand_name,
+        l.name as warehouse_location_name
+      FROM item i
+      LEFT JOIN brand b ON i.brand_id = b.id
+      LEFT JOIN location l ON i.warehouse_location_id = l.id
+      WHERE i.id = ?
+    `, [id]);
 
     if (existingRows.length === 0) {
       return res.status(404).json({
@@ -616,6 +663,8 @@ router.put('/:id', auth, requirePermission('canEditInventory'), validate(schemas
         error: 'Inventory item not found'
       });
     }
+
+    const oldItem = existingRows[0];
 
     // Build update query dynamically
     const updateFields = [];
@@ -646,8 +695,8 @@ router.put('/:id', auth, requirePermission('canEditInventory'), validate(schemas
     updateValues.push(id);
 
     const updateQuery = `
-      UPDATE item 
-      SET ${updateFields.join(', ')} 
+      UPDATE item
+      SET ${updateFields.join(', ')}
       WHERE id = ?
     `;
 
@@ -655,7 +704,7 @@ router.put('/:id', auth, requirePermission('canEditInventory'), validate(schemas
 
     // Fetch the updated item with related data
     const fetchQuery = `
-      SELECT 
+      SELECT
         i.*,
         b.name as brand_name,
         l.name as warehouse_location_name
@@ -666,19 +715,77 @@ router.put('/:id', auth, requirePermission('canEditInventory'), validate(schemas
     `;
 
     const [rows] = await pool.execute(fetchQuery, [id]);
+    const newItem = rows[0];
 
-    // Log activity for item update
-    const itemName = rows[0]?.name || 'Unknown';
+    // Build detailed change description
+    const changes = [];
+
+    // Field labels for human-readable descriptions
+    const fieldLabels = {
+      name: 'Name',
+      description: 'Description',
+      type: 'Type',
+      status: 'Status',
+      brand_id: 'Brand',
+      warehouse_location_id: 'Location'
+    };
+
+    // Check each field for changes
+    if (updates.hasOwnProperty('name') && oldItem.name !== newItem.name) {
+      changes.push(`Name: "${oldItem.name}" → "${newItem.name}"`);
+    }
+    if (updates.hasOwnProperty('description') && oldItem.description !== newItem.description) {
+      const oldDesc = oldItem.description || '(empty)';
+      const newDesc = newItem.description || '(empty)';
+      // Truncate long descriptions for readability in logs
+      const truncate = (str, maxLen = 50) => str.length > maxLen ? str.substring(0, maxLen) + '...' : str;
+      changes.push(`Description: "${truncate(oldDesc)}" → "${truncate(newDesc)}"`);
+    }
+    if (updates.hasOwnProperty('type') && oldItem.type !== newItem.type) {
+      changes.push(`Type: "${oldItem.type}" → "${newItem.type}"`);
+    }
+    if (updates.hasOwnProperty('status')) {
+      // Status change - check if it's toggling inactive
+      if (oldItem.status !== newItem.status) {
+        if (newItem.status === 'inactive') {
+          changes.push(`Marked as Inactive`);
+        } else if (oldItem.status === 'inactive') {
+          changes.push(`Reactivated (status will be auto-calculated)`);
+        } else {
+          changes.push(`Status: "${oldItem.status || 'none'}" → "${newItem.status}"`);
+        }
+      }
+    }
+    if (updates.hasOwnProperty('brand_id') && oldItem.brand_id !== newItem.brand_id) {
+      const oldBrand = oldItem.brand_name || '(none)';
+      const newBrand = newItem.brand_name || '(none)';
+      changes.push(`Brand: "${oldBrand}" → "${newBrand}"`);
+    }
+    if (updates.hasOwnProperty('warehouse_location_id') && oldItem.warehouse_location_id !== newItem.warehouse_location_id) {
+      const oldLoc = oldItem.warehouse_location_name || '(none)';
+      const newLoc = newItem.warehouse_location_name || '(none)';
+      changes.push(`Location: "${oldLoc}" → "${newLoc}"`);
+    }
+
+    // Create the log description
+    let logDescription;
+    if (changes.length > 0) {
+      logDescription = `Updated "${newItem.name}": ${changes.join(', ')}`;
+    } else {
+      logDescription = `Updated item "${newItem.name}" (no changes detected)`;
+    }
+
+    // Log activity for item update with detailed changes
     await pool.execute(`
       INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
       VALUES (?, 'updated', 'item', ?, ?, NOW())
-    `, [req.user?.id, id, `Updated item "${itemName}"`]);
+    `, [req.user?.id, id, logDescription]);
 
     res.json({
       success: true,
       message: 'Inventory item updated successfully',
       data: {
-        item: rows[0]
+        item: newItem
       }
     });
 
@@ -717,16 +824,25 @@ router.delete('/:id', auth, requirePermission('canDeleteInventory'), async (req,
       });
     }
 
-    const itemName = existingRows[0]?.name || 'Unknown';
+    const deletedItem = existingRows[0];
+    const itemName = deletedItem?.name || 'Unknown';
 
     // Delete the item
     await pool.execute('DELETE FROM item WHERE id = ?', [id]);
 
-    // Log activity for item deletion
+    // Log activity for item deletion with detailed information
+    const deleteDetails = [];
+    deleteDetails.push(`Type: ${deletedItem.type}`);
+    if (deletedItem.brand_name) deleteDetails.push(`Brand: ${deletedItem.brand_name}`);
+    if (deletedItem.warehouse_location_name) deleteDetails.push(`Location: ${deletedItem.warehouse_location_name}`);
+    deleteDetails.push(`Quantities - Delivered: ${deletedItem.delivered_quantity}, Available: ${deletedItem.available_quantity}, Damaged: ${deletedItem.damaged_quantity}, Lost: ${deletedItem.lost_quantity}`);
+
+    const deleteLogDescription = `Deleted item "${itemName}". ${deleteDetails.join(', ')}`;
+
     await pool.execute(`
       INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
       VALUES (?, 'deleted', 'item', ?, ?, NOW())
-    `, [req.user?.id, id, `Deleted item "${itemName}"`]);
+    `, [req.user?.id, id, deleteLogDescription]);
 
     res.json({
       success: true,
@@ -817,6 +933,69 @@ router.get('/locations', auth, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Server error retrieving locations',
+      details: error.message
+    });
+  }
+});
+
+// @route   POST /api/inventory/brands
+// @desc    Create a new brand
+// @access  Private
+router.post('/brands', auth, async (req, res) => {
+  try {
+    const { name, description } = req.body;
+
+    if (!name || name.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: 'Brand name is required'
+      });
+    }
+
+    // Check if brand already exists
+    const [existingBrand] = await pool.execute(
+      'SELECT id FROM brand WHERE LOWER(name) = LOWER(?)',
+      [name.trim()]
+    );
+
+    if (existingBrand.length > 0) {
+      return res.status(409).json({
+        success: false,
+        error: 'A brand with this name already exists'
+      });
+    }
+
+    // Insert new brand
+    const [result] = await pool.execute(
+      'INSERT INTO brand (name, description) VALUES (?, ?)',
+      [name.trim(), description || null]
+    );
+
+    // Fetch the created brand
+    const [newBrand] = await pool.execute(
+      'SELECT id, name, description FROM brand WHERE id = ?',
+      [result.insertId]
+    );
+
+    // Log activity
+    await pool.execute(`
+      INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
+      VALUES (?, 'created', 'brand', ?, ?, NOW())
+    `, [req.user?.id, result.insertId, `Created brand "${name.trim()}"`]);
+
+    res.status(201).json({
+      success: true,
+      message: 'Brand created successfully',
+      data: {
+        brand: newBrand[0]
+      }
+    });
+
+  } catch (error) {
+    console.error('Create brand error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error creating brand',
       details: error.message
     });
   }
@@ -1024,14 +1203,18 @@ router.post('/:id/issue', auth, async (req, res) => {
       WHERE id = ?
     `, [newAvailableQuantity, newIssueQuantity, id]);
 
-    // Log the activity
+    // Log the activity with detailed information
+    const itemName = existingRows[0].name;
+    const issueLabel = issue_type === 'damage' ? 'Damaged' : 'Lost';
+    const logDescription = `Reported ${issueLabel} for "${itemName}": ${quantity} item(s). Available quantity: ${existingRows[0].available_quantity} → ${newAvailableQuantity}, ${issueLabel} quantity: ${currentIssueQuantity} → ${newIssueQuantity}${description ? `. Reason: ${description}` : ''}`;
+
     await pool.execute(`
       INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
       VALUES (?, 'issue_reported', 'item', ?, ?, NOW())
     `, [
-      req.user.id, 
-      id, 
-      `${issue_type === 'damage' ? 'Damage' : 'Loss'} reported: ${quantity} items. ${description || ''}`
+      req.user.id,
+      id,
+      logDescription
     ]);
 
     // Create damage/loss log
@@ -1121,6 +1304,629 @@ router.get('/:id/activity', auth, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Server error retrieving activity logs'
+    });
+  }
+});
+
+// @route   GET /api/inventory/:id/reservations
+// @desc    Get all reservations for a specific item (items reserved for scheduled project days)
+// @access  Private
+router.get('/:id/reservations', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if item exists
+    const [existingRows] = await pool.execute('SELECT id, name, reserved_quantity FROM item WHERE id = ?', [id]);
+
+    if (existingRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Inventory item not found'
+      });
+    }
+
+    const item = existingRows[0];
+
+    // Get all reservations (items allocated to scheduled project days)
+    const [reservationsRows] = await pool.execute(`
+      SELECT
+        pi.id as project_item_id,
+        pi.allocated_quantity as reserved_quantity,
+        pd.id as project_day_id,
+        pd.project_date,
+        pd.status as day_status,
+        p.id as project_id,
+        p.jo_number,
+        p.name as project_name,
+        p.status as project_status
+      FROM project_item pi
+      JOIN project_day pd ON pi.project_day_id = pd.id
+      JOIN project p ON pd.project_id = p.id
+      WHERE pi.item_id = ?
+        AND (pd.status = 'scheduled' OR pd.status IS NULL)
+      ORDER BY pd.project_date ASC
+    `, [id]);
+
+    res.json({
+      success: true,
+      message: 'Reservations retrieved successfully',
+      data: {
+        item: {
+          id: item.id,
+          name: item.name,
+          total_reserved: item.reserved_quantity
+        },
+        reservations: reservationsRows
+      }
+    });
+
+  } catch (error) {
+    console.error('Get reservations error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error retrieving reservations'
+    });
+  }
+});
+
+// ====================
+// MULTI-WAREHOUSE ENDPOINTS
+// ====================
+
+// @route   GET /api/inventory/:id/locations
+// @desc    Get all locations with quantities for a specific item
+// @access  Private
+router.get('/:id/locations', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if item exists
+    const [itemRows] = await pool.execute('SELECT id, name FROM item WHERE id = ?', [id]);
+
+    if (itemRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Inventory item not found'
+      });
+    }
+
+    // Get total delivered from delivery_log (sum of all deliveries)
+    const [deliveryRows] = await pool.execute(`
+      SELECT COALESCE(SUM(quantity), 0) as total_delivered
+      FROM delivery_log
+      WHERE item_id = ? AND type = 'delivery'
+    `, [id]);
+
+    const totalDelivered = deliveryRows[0]?.total_delivered || 0;
+
+    // Get all item_location records for this item
+    const [locationRows] = await pool.execute(`
+      SELECT
+        il.id,
+        il.item_id,
+        il.location_id,
+        l.name as location_name,
+        l.type as location_type,
+        l.city,
+        l.province,
+        il.quantity,
+        il.reserved_quantity,
+        (il.quantity - il.reserved_quantity - il.damaged_quantity - il.lost_quantity) as available_quantity,
+        il.damaged_quantity,
+        il.lost_quantity,
+        il.created_at,
+        il.updated_at
+      FROM item_location il
+      JOIN location l ON il.location_id = l.id
+      WHERE il.item_id = ?
+      ORDER BY il.quantity DESC, l.name ASC
+    `, [id]);
+
+    res.json({
+      success: true,
+      message: 'Item locations retrieved successfully',
+      data: {
+        item: {
+          ...itemRows[0],
+          total_delivered: totalDelivered
+        },
+        locations: locationRows
+      }
+    });
+
+  } catch (error) {
+    console.error('Get item locations error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error retrieving item locations'
+    });
+  }
+});
+
+// @route   POST /api/inventory/:id/delivery
+// @desc    Add a new delivery to a specific location (only increases quantity)
+// @access  Private
+router.post('/:id/delivery', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { location_id, quantity, reference_number, notes } = req.body;
+
+    // Validate required fields
+    if (!location_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Location is required'
+      });
+    }
+
+    if (!quantity || quantity <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Quantity must be greater than 0'
+      });
+    }
+
+    // Check if item exists
+    const [itemRows] = await pool.execute('SELECT id, name FROM item WHERE id = ?', [id]);
+
+    if (itemRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Inventory item not found'
+      });
+    }
+
+    // Check if location exists
+    const [locationRows] = await pool.execute('SELECT id, name FROM location WHERE id = ?', [location_id]);
+
+    if (locationRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Location not found'
+      });
+    }
+
+    const itemName = itemRows[0].name;
+    const locationName = locationRows[0].name;
+
+    // Check if item_location record exists
+    const [existingItemLocation] = await pool.execute(
+      'SELECT id, quantity FROM item_location WHERE item_id = ? AND location_id = ?',
+      [id, location_id]
+    );
+
+    if (existingItemLocation.length > 0) {
+      // Update existing item_location record
+      await pool.execute(`
+        UPDATE item_location
+        SET quantity = quantity + ?, updated_at = NOW()
+        WHERE item_id = ? AND location_id = ?
+      `, [quantity, id, location_id]);
+    } else {
+      // Create new item_location record
+      await pool.execute(`
+        INSERT INTO item_location (item_id, location_id, quantity, reserved_quantity, damaged_quantity, lost_quantity, created_at)
+        VALUES (?, ?, ?, 0, 0, 0, NOW())
+      `, [id, location_id, quantity]);
+
+      // Update item's primary warehouse_location_id if not set
+      const [itemCheck] = await pool.execute('SELECT warehouse_location_id FROM item WHERE id = ?', [id]);
+      if (!itemCheck[0].warehouse_location_id) {
+        await pool.execute('UPDATE item SET warehouse_location_id = ? WHERE id = ?', [location_id, id]);
+      }
+    }
+
+    // Create delivery_log entry
+    await pool.execute(`
+      INSERT INTO delivery_log (item_id, location_id, quantity, type, notes, reference_number, performed_by, created_at)
+      VALUES (?, ?, ?, 'delivery', ?, ?, ?, NOW())
+    `, [id, location_id, quantity, notes || null, reference_number || null, req.user.id]);
+
+    // Create activity log
+    await pool.execute(`
+      INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
+      VALUES (?, 'delivery_added', 'item', ?, ?, NOW())
+    `, [
+      req.user.id,
+      id,
+      `Received delivery of ${quantity} units at "${locationName}"${reference_number ? ` (Ref: ${reference_number})` : ''}`
+    ]);
+
+    // Create inventory log
+    await pool.execute(`
+      INSERT INTO inventory_log (item_id, log_type, quantity, to_location_id, handled_by, reference_no, remarks, created_at)
+      VALUES (?, 'in', ?, ?, ?, ?, ?, NOW())
+    `, [id, quantity, location_id, req.user.id, reference_number || null, `Delivery received at ${locationName}`]);
+
+    res.status(201).json({
+      success: true,
+      message: 'Delivery added successfully',
+      data: {
+        item_id: parseInt(id),
+        location_id: location_id,
+        quantity_added: quantity,
+        reference_number: reference_number || null
+      }
+    });
+
+  } catch (error) {
+    console.error('Add delivery error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error adding delivery'
+    });
+  }
+});
+
+// @route   POST /api/inventory/:id/adjustment
+// @desc    Make an admin adjustment to quantity (can increase or decrease, requires reason)
+// @access  Private (Admin only)
+router.post('/:id/adjustment', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { location_id, quantity, reason } = req.body;
+
+    // Check if user has admin permission
+    const userPermissions = req.user?.permissions;
+    const isAdmin = req.user?.positionName === 'Administrator';
+    const hasPermission = userPermissions && userPermissions.canManageInventory;
+
+    if (!isAdmin && !hasPermission) {
+      return res.status(403).json({
+        success: false,
+        error: 'Only administrators can make quantity adjustments'
+      });
+    }
+
+    // Validate required fields
+    if (!location_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Location is required'
+      });
+    }
+
+    if (quantity === undefined || quantity === null) {
+      return res.status(400).json({
+        success: false,
+        error: 'Quantity adjustment is required'
+      });
+    }
+
+    if (!reason || reason.trim().length < 5) {
+      return res.status(400).json({
+        success: false,
+        error: 'Adjustment reason is required (minimum 5 characters)'
+      });
+    }
+
+    // Check if item exists
+    const [itemRows] = await pool.execute('SELECT id, name FROM item WHERE id = ?', [id]);
+
+    if (itemRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Inventory item not found'
+      });
+    }
+
+    // Check if location exists
+    const [locationRows] = await pool.execute('SELECT id, name FROM location WHERE id = ?', [location_id]);
+
+    if (locationRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Location not found'
+      });
+    }
+
+    const itemName = itemRows[0].name;
+    const locationName = locationRows[0].name;
+
+    // Check if item_location record exists
+    const [existingItemLocation] = await pool.execute(
+      'SELECT id, quantity, reserved_quantity, damaged_quantity, lost_quantity FROM item_location WHERE item_id = ? AND location_id = ?',
+      [id, location_id]
+    );
+
+    if (existingItemLocation.length === 0) {
+      // If no record exists and quantity is positive, create one
+      if (quantity > 0) {
+        await pool.execute(`
+          INSERT INTO item_location (item_id, location_id, quantity, reserved_quantity, damaged_quantity, lost_quantity, created_at)
+          VALUES (?, ?, ?, 0, 0, 0, NOW())
+        `, [id, location_id, quantity]);
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: 'No stock exists at this location to adjust'
+        });
+      }
+    } else {
+      const currentRecord = existingItemLocation[0];
+      const newQuantity = currentRecord.quantity + quantity;
+      const availableAtLocation = currentRecord.quantity - currentRecord.reserved_quantity - currentRecord.damaged_quantity - currentRecord.lost_quantity;
+
+      // For negative adjustments, check there's enough available
+      if (quantity < 0 && Math.abs(quantity) > availableAtLocation) {
+        return res.status(400).json({
+          success: false,
+          error: `Cannot reduce by ${Math.abs(quantity)}. Only ${availableAtLocation} available at this location (${currentRecord.reserved_quantity} reserved)`
+        });
+      }
+
+      if (newQuantity < 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Adjustment would result in negative quantity'
+        });
+      }
+
+      // Update item_location record
+      await pool.execute(`
+        UPDATE item_location
+        SET quantity = ?, updated_at = NOW()
+        WHERE item_id = ? AND location_id = ?
+      `, [newQuantity, id, location_id]);
+    }
+
+    // Create delivery_log entry with type='adjustment'
+    await pool.execute(`
+      INSERT INTO delivery_log (item_id, location_id, quantity, type, adjustment_reason, notes, performed_by, created_at)
+      VALUES (?, ?, ?, 'adjustment', ?, NULL, ?, NOW())
+    `, [id, location_id, quantity, reason.trim(), req.user.id]);
+
+    // Create activity log
+    const adjustmentType = quantity > 0 ? 'increased' : 'decreased';
+    await pool.execute(`
+      INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
+      VALUES (?, 'quantity_adjusted', 'item', ?, ?, NOW())
+    `, [
+      req.user.id,
+      id,
+      `Admin adjustment: ${adjustmentType} by ${Math.abs(quantity)} units at "${locationName}". Reason: ${reason.trim()}`
+    ]);
+
+    // Create inventory log
+    await pool.execute(`
+      INSERT INTO inventory_log (item_id, log_type, quantity, to_location_id, handled_by, remarks, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, NOW())
+    `, [
+      id,
+      quantity > 0 ? 'in' : 'out',
+      Math.abs(quantity),
+      location_id,
+      req.user.id,
+      `Admin adjustment: ${reason.trim()}`
+    ]);
+
+    res.status(200).json({
+      success: true,
+      message: 'Quantity adjusted successfully',
+      data: {
+        item_id: parseInt(id),
+        location_id: location_id,
+        quantity_adjusted: quantity,
+        reason: reason.trim()
+      }
+    });
+
+  } catch (error) {
+    console.error('Quantity adjustment error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error making adjustment'
+    });
+  }
+});
+
+// @route   POST /api/inventory/:id/transfer
+// @desc    Transfer stock between locations
+// @access  Private
+router.post('/:id/transfer', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { from_location_id, to_location_id, quantity, notes } = req.body;
+
+    // Validate required fields
+    if (!from_location_id || !to_location_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Both source and destination locations are required'
+      });
+    }
+
+    if (from_location_id === to_location_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Source and destination locations must be different'
+      });
+    }
+
+    if (!quantity || quantity <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Quantity must be greater than 0'
+      });
+    }
+
+    // Check if item exists
+    const [itemRows] = await pool.execute('SELECT id, name FROM item WHERE id = ?', [id]);
+
+    if (itemRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Inventory item not found'
+      });
+    }
+
+    // Check if source location exists and has enough stock
+    const [fromLocationRows] = await pool.execute('SELECT id, name FROM location WHERE id = ?', [from_location_id]);
+    if (fromLocationRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Source location not found'
+      });
+    }
+
+    // Check if destination location exists
+    const [toLocationRows] = await pool.execute('SELECT id, name FROM location WHERE id = ?', [to_location_id]);
+    if (toLocationRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Destination location not found'
+      });
+    }
+
+    const itemName = itemRows[0].name;
+    const fromLocationName = fromLocationRows[0].name;
+    const toLocationName = toLocationRows[0].name;
+
+    // Check if source item_location has enough available quantity
+    const [sourceItemLocation] = await pool.execute(
+      'SELECT id, quantity, reserved_quantity, damaged_quantity, lost_quantity FROM item_location WHERE item_id = ? AND location_id = ?',
+      [id, from_location_id]
+    );
+
+    if (sourceItemLocation.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No stock exists at the source location'
+      });
+    }
+
+    const sourceRecord = sourceItemLocation[0];
+    const availableAtSource = sourceRecord.quantity - sourceRecord.reserved_quantity - sourceRecord.damaged_quantity - sourceRecord.lost_quantity;
+
+    if (quantity > availableAtSource) {
+      return res.status(400).json({
+        success: false,
+        error: `Insufficient stock at source. Available: ${availableAtSource}, Requested: ${quantity}`
+      });
+    }
+
+    // Decrease quantity at source
+    await pool.execute(`
+      UPDATE item_location
+      SET quantity = quantity - ?, updated_at = NOW()
+      WHERE item_id = ? AND location_id = ?
+    `, [quantity, id, from_location_id]);
+
+    // Increase quantity at destination (or create record if doesn't exist)
+    const [destItemLocation] = await pool.execute(
+      'SELECT id FROM item_location WHERE item_id = ? AND location_id = ?',
+      [id, to_location_id]
+    );
+
+    if (destItemLocation.length > 0) {
+      await pool.execute(`
+        UPDATE item_location
+        SET quantity = quantity + ?, updated_at = NOW()
+        WHERE item_id = ? AND location_id = ?
+      `, [quantity, id, to_location_id]);
+    } else {
+      await pool.execute(`
+        INSERT INTO item_location (item_id, location_id, quantity, reserved_quantity, damaged_quantity, lost_quantity, created_at)
+        VALUES (?, ?, ?, 0, 0, 0, NOW())
+      `, [id, to_location_id, quantity]);
+    }
+
+    // Create stock_transfer log
+    await pool.execute(`
+      INSERT INTO stock_transfer (item_id, from_location_id, to_location_id, quantity, notes, performed_by, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, NOW())
+    `, [id, from_location_id, to_location_id, quantity, notes || null, req.user.id]);
+
+    // Create activity log
+    await pool.execute(`
+      INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
+      VALUES (?, 'stock_transferred', 'item', ?, ?, NOW())
+    `, [
+      req.user.id,
+      id,
+      `Transferred ${quantity} units from "${fromLocationName}" to "${toLocationName}"${notes ? `. Notes: ${notes}` : ''}`
+    ]);
+
+    // Create inventory log
+    await pool.execute(`
+      INSERT INTO inventory_log (item_id, log_type, quantity, from_location_id, to_location_id, handled_by, remarks, created_at)
+      VALUES (?, 'transfer', ?, ?, ?, ?, ?, NOW())
+    `, [id, quantity, from_location_id, to_location_id, req.user.id, `Stock transfer${notes ? `: ${notes}` : ''}`]);
+
+    res.status(200).json({
+      success: true,
+      message: 'Stock transferred successfully',
+      data: {
+        item_id: parseInt(id),
+        from_location_id: from_location_id,
+        to_location_id: to_location_id,
+        quantity_transferred: quantity
+      }
+    });
+
+  } catch (error) {
+    console.error('Stock transfer error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error transferring stock'
+    });
+  }
+});
+
+// @route   GET /api/inventory/:id/deliveries
+// @desc    Get delivery and adjustment history for an item
+// @access  Private
+router.get('/:id/deliveries', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if item exists
+    const [itemRows] = await pool.execute('SELECT id, name FROM item WHERE id = ?', [id]);
+
+    if (itemRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Inventory item not found'
+      });
+    }
+
+    // Get delivery log entries
+    const [deliveryRows] = await pool.execute(`
+      SELECT
+        dl.id,
+        dl.item_id,
+        dl.location_id,
+        l.name as location_name,
+        dl.quantity,
+        dl.type,
+        dl.adjustment_reason,
+        dl.notes,
+        dl.reference_number,
+        dl.performed_by,
+        CONCAT(u.first_name, ' ', u.last_name) as performed_by_name,
+        dl.created_at
+      FROM delivery_log dl
+      JOIN location l ON dl.location_id = l.id
+      LEFT JOIN user u ON dl.performed_by = u.id
+      WHERE dl.item_id = ?
+      ORDER BY dl.created_at DESC
+      LIMIT 100
+    `, [id]);
+
+    res.json({
+      success: true,
+      message: 'Delivery history retrieved successfully',
+      data: {
+        item: itemRows[0],
+        deliveries: deliveryRows
+      }
+    });
+
+  } catch (error) {
+    console.error('Get delivery history error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error retrieving delivery history'
     });
   }
 });

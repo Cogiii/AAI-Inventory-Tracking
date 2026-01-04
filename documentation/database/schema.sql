@@ -107,9 +107,10 @@ CREATE TABLE item (
     damaged_quantity INT DEFAULT 0,
     lost_quantity INT DEFAULT 0,
     available_quantity INT DEFAULT 0,
+    reserved_quantity INT DEFAULT 0,  -- Items reserved for upcoming/scheduled project days
     warehouse_location_id INT REFERENCES location(id) ON DELETE SET NULL,
     expired_date DATE,
-    status ENUM('in stock', 'out of stock', 'inactive') DEFAULT 'in stock',
+    status ENUM('in stock', 'out of stock', 'low stock', 'inactive') DEFAULT 'in stock',
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NULL ON UPDATE NOW()
 );
@@ -134,6 +135,9 @@ CREATE TABLE project_day (
     project_id INT REFERENCES project(id) ON DELETE CASCADE,
     project_date DATE NOT NULL,
     location_id INT REFERENCES location(id) ON DELETE SET NULL,
+    status ENUM('scheduled', 'completed') DEFAULT 'scheduled',  -- Day status for item reservation system
+    completed_at TIMESTAMP DEFAULT NULL,  -- When the day was marked as complete
+    completed_by INT REFERENCES user(id) ON DELETE SET NULL,  -- User who completed the day
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NULL ON UPDATE NOW()
 );
@@ -142,6 +146,7 @@ CREATE TABLE project_item (
     id SERIAL PRIMARY KEY,
     project_day_id INT REFERENCES project_day(id) ON DELETE CASCADE,
     item_id INT REFERENCES item(id) ON DELETE CASCADE,
+    source_location_id INT REFERENCES location(id) ON DELETE SET NULL,  -- Source warehouse for this allocation
     allocated_quantity INT DEFAULT 0,
     damaged_quantity INT DEFAULT 0,
     lost_quantity INT DEFAULT 0,
@@ -213,6 +218,79 @@ CREATE TABLE damage_loss_log (
     remarks TEXT,
     created_at TIMESTAMP DEFAULT NOW()
 );
+
+-- ====================
+-- 5. MULTI-WAREHOUSE INVENTORY MANAGEMENT
+-- ====================
+
+-- ITEM_LOCATION: Tracks item quantities per warehouse/location
+-- This enables items to exist in multiple locations with different quantities
+CREATE TABLE item_location (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    item_id BIGINT UNSIGNED NOT NULL,
+    location_id INT NOT NULL,
+    quantity INT NOT NULL DEFAULT 0,           -- Total quantity at this location
+    reserved_quantity INT NOT NULL DEFAULT 0,  -- Reserved for scheduled project days
+    damaged_quantity INT NOT NULL DEFAULT 0,   -- Damaged items at this location
+    lost_quantity INT NOT NULL DEFAULT 0,      -- Lost items at this location
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT NULL ON UPDATE NOW(),
+    FOREIGN KEY (item_id) REFERENCES item(id) ON DELETE CASCADE,
+    FOREIGN KEY (location_id) REFERENCES location(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_item_location (item_id, location_id),
+    CHECK (quantity >= 0),
+    CHECK (reserved_quantity >= 0),
+    CHECK (damaged_quantity >= 0),
+    CHECK (lost_quantity >= 0)
+);
+
+CREATE INDEX idx_item_location_item ON item_location(item_id);
+CREATE INDEX idx_item_location_location ON item_location(location_id);
+
+-- DELIVERY_LOG: Tracks all deliveries and admin adjustments
+-- type = 'delivery': Regular stock additions (only increases)
+-- type = 'adjustment': Admin corrections (can increase or decrease, requires reason)
+CREATE TABLE delivery_log (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    item_id BIGINT UNSIGNED NOT NULL,
+    location_id INT NOT NULL,
+    quantity INT NOT NULL,                     -- Positive for additions, can be negative for adjustments
+    type ENUM('delivery', 'adjustment') NOT NULL DEFAULT 'delivery',
+    adjustment_reason TEXT,                    -- Required when type = 'adjustment'
+    notes TEXT,
+    reference_number VARCHAR(100),             -- PO number, delivery receipt, etc.
+    performed_by BIGINT UNSIGNED,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (item_id) REFERENCES item(id) ON DELETE CASCADE,
+    FOREIGN KEY (location_id) REFERENCES location(id) ON DELETE CASCADE,
+    FOREIGN KEY (performed_by) REFERENCES user(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_delivery_log_item ON delivery_log(item_id);
+CREATE INDEX idx_delivery_log_location ON delivery_log(location_id);
+CREATE INDEX idx_delivery_log_type ON delivery_log(type);
+
+-- STOCK_TRANSFER: Tracks transfers between locations
+CREATE TABLE stock_transfer (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    item_id BIGINT UNSIGNED NOT NULL,
+    from_location_id INT NOT NULL,
+    to_location_id INT NOT NULL,
+    quantity INT NOT NULL,
+    notes TEXT,
+    performed_by BIGINT UNSIGNED,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (item_id) REFERENCES item(id) ON DELETE CASCADE,
+    FOREIGN KEY (from_location_id) REFERENCES location(id) ON DELETE CASCADE,
+    FOREIGN KEY (to_location_id) REFERENCES location(id) ON DELETE CASCADE,
+    FOREIGN KEY (performed_by) REFERENCES user(id) ON DELETE SET NULL,
+    CHECK (quantity > 0),
+    CHECK (from_location_id != to_location_id)
+);
+
+CREATE INDEX idx_stock_transfer_item ON stock_transfer(item_id);
+CREATE INDEX idx_stock_transfer_from ON stock_transfer(from_location_id);
+CREATE INDEX idx_stock_transfer_to ON stock_transfer(to_location_id);
 
 -- ==============================================================
 -- END OF SCHEMA

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { FC } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Package, Box, AlertTriangle, CheckCircle, XCircle, Plus, Edit, Trash2, Calendar, Loader2 } from 'lucide-react'
+import { Package, Box, AlertTriangle, CheckCircle, XCircle, Plus, Edit, Trash2, Calendar, Loader2, Lock } from 'lucide-react'
 import AddItemForm from '../modals/AddItemForm'
 import EditItemForm from '../modals/EditItemForm'
 import { ConfirmationModal } from '@/components/ui'
@@ -117,6 +117,15 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
     return item.allocated_quantity - item.damaged_quantity - item.lost_quantity - item.returned_quantity
   }
 
+  // Check if an item's day is completed (item cannot be edited)
+  const isItemDayCompleted = (item: any) => {
+    const day = projectDays.find(d => d.id === item.project_day_id)
+    return day?.day_status === 'completed'
+  }
+
+  // Check if there are any non-completed days for adding items
+  const hasEditableDays = projectDays.some(day => day.day_status !== 'completed')
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
@@ -151,7 +160,13 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
           </CardTitle>
           <button
             onClick={() => setShowAddForm(true)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 hover:shadow-lg transition-all duration-200 hover:scale-105 text-sm"
+            disabled={!hasEditableDays}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-200 text-sm ${
+              hasEditableDays
+                ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg hover:scale-105'
+                : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+            }`}
+            title={!hasEditableDays ? 'All project days are completed' : 'Add item to project'}
           >
             <Plus className="h-4 w-4" />
             Add Item
@@ -170,20 +185,31 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
           >
             All Days
           </button>
-          {projectDays.map(day => (
-            <button
-              key={day.id}
-              onClick={() => setSelectedDay(day.id)}
-              className={`px-3 py-1 text-xs rounded-full transition-all duration-200 ${
-                selectedDay === day.id
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:shadow-sm hover:scale-105'
-              }`}
-            >
-              <Calendar className="h-3 w-3 inline mr-1" />
-              {formatDate(day.project_date)}
-            </button>
-          ))}
+          {projectDays.map(day => {
+            const isCompleted = day.day_status === 'completed'
+            return (
+              <button
+                key={day.id}
+                onClick={() => setSelectedDay(day.id)}
+                className={`px-3 py-1 text-xs rounded-full transition-all duration-200 flex items-center gap-1 ${
+                  selectedDay === day.id
+                    ? isCompleted
+                      ? 'bg-green-600 text-white shadow-lg'
+                      : 'bg-blue-600 text-white shadow-lg'
+                    : isCompleted
+                      ? 'bg-green-100 text-green-700 hover:bg-green-200 hover:shadow-sm hover:scale-105'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:shadow-sm hover:scale-105'
+                }`}
+              >
+                {isCompleted ? (
+                  <Lock className="h-3 w-3" />
+                ) : (
+                  <Calendar className="h-3 w-3" />
+                )}
+                {formatDate(day.project_date)}
+              </button>
+            )
+          })}
         </div>
       </CardHeader>
       
@@ -198,9 +224,10 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
             {displayItems.map((item) => {
               const StatusIcon = getStatusIcon(item.status)
               const inUseQuantity = calculateInUse(item)
-              
+              const isDayCompleted = isItemDayCompleted(item)
+
               return (
-                <Card key={`${item.id}-${item.project_day_id}`} className="bg-white hover:shadow-sm transition-shadow">
+                <Card key={`${item.id}-${item.project_day_id}`} className={`bg-white hover:shadow-sm transition-shadow ${isDayCompleted ? 'border-green-200' : ''}`}>
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
@@ -213,14 +240,25 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
                             {item.item_type}
                           </span>
                           {selectedDay === 'all' && (
-                            <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">
+                            <span className={`px-2 py-1 text-xs rounded-full flex items-center gap-1 ${
+                              isDayCompleted
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {isDayCompleted && <Lock className="h-3 w-3" />}
                               Day {projectDays.findIndex(d => d.id === item.project_day_id) + 1}
                             </span>
                           )}
+                          {isDayCompleted && selectedDay !== 'all' && (
+                            <span className="flex items-center gap-1 text-xs text-green-600">
+                              <Lock className="h-3 w-3" />
+                              Locked
+                            </span>
+                          )}
                         </div>
-                        
+
                         <div className="text-xs text-gray-600 mb-3">
-                          <span className="font-medium">Brand:</span> {item.brand_name} | 
+                          <span className="font-medium">Brand:</span> {item.brand_name} |
                           <span className="ml-1 font-medium">Location:</span> {item.warehouse_location}
                         </div>
 
@@ -231,16 +269,16 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
                             <span className="ml-1 font-bold">{item.allocated_quantity}</span>
                           </div>
                           <div className="bg-green-50 p-2 rounded">
-                            <span className="font-medium text-green-800">In Use:</span>
-                            <span className="ml-1 font-bold">{inUseQuantity}</span>
-                          </div>
-                          <div className="bg-orange-50 p-2 rounded">
-                            <span className="font-medium text-orange-800">Returned:</span>
+                            <span className="font-medium text-green-800">Returned:</span>
                             <span className="ml-1 font-bold">{item.returned_quantity}</span>
                           </div>
+                          <div className="bg-orange-50 p-2 rounded">
+                            <span className="font-medium text-orange-800">Damaged:</span>
+                            <span className="ml-1 font-bold">{item.damaged_quantity}</span>
+                          </div>
                           <div className="bg-red-50 p-2 rounded">
-                            <span className="font-medium text-red-800">Issues:</span>
-                            <span className="ml-1 font-bold">{item.damaged_quantity + item.lost_quantity}</span>
+                            <span className="font-medium text-red-800">Lost:</span>
+                            <span className="ml-1 font-bold">{item.lost_quantity}</span>
                           </div>
                         </div>
 
@@ -256,33 +294,36 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
                           </div>
                         )}
                       </div>
-                      
+
                       <div className="flex flex-col items-end gap-2">
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(item.status)}`}>
                           {item.status.replace('_', ' ')}
                         </span>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setEditingItem(item)}
-                            disabled={deleteProjectItemMutation.isPending}
-                            className="p-2 text-blue-600 hover:bg-blue-50 hover:shadow-lg rounded-lg transition-all duration-200 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Edit item"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteClick(item, item.project_day_id)}
-                            disabled={deleteProjectItemMutation.isPending}
-                            className="p-2 text-red-600 hover:bg-red-50 hover:shadow-lg rounded-lg transition-all duration-200 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Delete item"
-                          >
-                            {deleteProjectItemMutation.isPending && deleteConfirmation.item?.id === item.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
+                        {/* Only show action buttons for non-completed days */}
+                        {!isDayCompleted && (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setEditingItem(item)}
+                              disabled={deleteProjectItemMutation.isPending}
+                              className="p-2 text-blue-600 hover:bg-blue-50 hover:shadow-lg rounded-lg transition-all duration-200 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Edit item"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteClick(item, item.project_day_id)}
+                              disabled={deleteProjectItemMutation.isPending}
+                              className="p-2 text-red-600 hover:bg-red-50 hover:shadow-lg rounded-lg transition-all duration-200 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Delete item"
+                            >
+                              {deleteProjectItemMutation.isPending && deleteConfirmation.item?.id === item.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </CardContent>
