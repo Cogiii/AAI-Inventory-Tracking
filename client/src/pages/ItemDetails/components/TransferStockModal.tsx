@@ -103,7 +103,7 @@ const TransferStockModal = ({
                 to_location_id: locationId
               }))}
               placeholder="Select destination location..."
-              allowCreate={false}
+              allowCreate={true}
               locations={destinationLocations}
               disabled={!transferForm.from_location_id}
             />

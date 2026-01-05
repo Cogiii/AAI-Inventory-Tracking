@@ -55,7 +55,7 @@ const AddStockModal = ({
                 location_id: locationId
               }))}
               placeholder="Select warehouse or office..."
-              allowCreate={false}
+              allowCreate={true}
               locations={availableLocations}
             />
             <p className="mt-1 text-xs text-gray-500">

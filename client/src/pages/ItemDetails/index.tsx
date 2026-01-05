@@ -4,9 +4,9 @@ import ConfirmationModal from '@/components/ui/confirmation-modal'
 import Loader from '@/components/ui/Loader'
 import { useAuth } from '@/hooks/useAuth'
 import { hasPermission } from '@/utils/permissions'
+import { useLocations } from '@/hooks/useInventory'
 import {
   getInventoryItem,
-  getLocations,
   updateInventoryItem,
   updateItemQuantity,
   moveItemLocation,
@@ -166,7 +166,10 @@ const ItemDetails = () => {
   })
 
   const [saving, setSaving] = useState(false)
-  const [availableLocations, setAvailableLocations] = useState<any[]>([])
+
+  // Use React Query for locations - auto-refreshes when cache is invalidated
+  const { data: locationsResponse } = useLocations()
+  const availableLocations = locationsResponse?.data?.locations || []
 
   // Discard changes confirmation modal
   const [discardModalOpen, setDiscardModalOpen] = useState(false)
@@ -222,22 +225,10 @@ const ItemDetails = () => {
     }
   }
 
-  const fetchAvailableLocations = async () => {
-    try {
-      const response = await getLocations()
-      if (response.success) {
-        setAvailableLocations(response.data.locations)
-      }
-    } catch (error) {
-      console.error('Error fetching locations:', error)
-    }
-  }
-
   useEffect(() => {
     fetchItem()
     fetchActivities()
     fetchItemLocations()
-    fetchAvailableLocations()
   }, [id])
 
   // Populate forms when item loads

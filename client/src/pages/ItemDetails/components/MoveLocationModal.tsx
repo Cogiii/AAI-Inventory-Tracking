@@ -38,7 +38,7 @@ const MoveLocationModal = ({
                 warehouse_location_id: locationId
               }))}
               placeholder="Search or select location..."
-              allowCreate={false}
+              allowCreate={true}
               locations={availableLocations}
             />
           </div>
