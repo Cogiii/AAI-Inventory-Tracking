@@ -10,7 +10,8 @@ export { default as ActivityHistoryCard } from './ActivityHistoryCard'
 export { default as ReservationsCard } from './ReservationsCard'
 
 // Multi-warehouse components
-export { default as AddDeliveryModal } from './AddDeliveryModal'
+export { default as AddStockModal } from './AddStockModal'
+export { default as OutStockModal } from './OutStockModal'
 export { default as AdjustQuantityModal } from './AdjustQuantityModal'
 export { default as TransferStockModal } from './TransferStockModal'
 export { default as LocationQuantitiesCard } from './LocationQuantitiesCard'

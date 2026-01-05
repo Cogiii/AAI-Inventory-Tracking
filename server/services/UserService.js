@@ -80,19 +80,30 @@ class UserService {
   static async findByUsernameWithPermissions(username) {
     try {
       const sql = `
-        SELECT u.*, p.name as position_name, p.can_manage_projects, p.can_edit_project,
-               p.can_add_project, p.can_delete_project, p.can_manage_inventory,
-               p.can_add_inventory, p.can_edit_inventory, p.can_delete_inventory,
-               p.can_manage_users, p.can_edit_user, p.can_add_user, p.can_delete_user
+        SELECT u.*, p.name as position_name, p.permissions
         FROM user u
         LEFT JOIN \`position\` p ON u.position_id = p.id
         WHERE u.username = ? AND u.is_active = TRUE
         LIMIT 1
       `;
       const user = await queryOne(sql, [username]);
-      
+
       if (!user) {
         return null;
+      }
+
+      // Parse JSON permissions (handle both string and object)
+      let permissions = { projects: [], inventory: [], users: [] };
+      if (user.permissions) {
+        if (typeof user.permissions === 'string') {
+          try {
+            permissions = JSON.parse(user.permissions);
+          } catch (e) {
+            console.error('Failed to parse permissions JSON:', e);
+          }
+        } else {
+          permissions = user.permissions;
+        }
       }
 
       // Transform to match the auth middleware format
@@ -110,20 +121,7 @@ class UserService {
         created_at: user.created_at,
         updated_at: user.updated_at,
         password_hash: user.password_hash,
-        permissions: {
-          canManageProjects: user.can_manage_projects,
-          canEditProject: user.can_edit_project,
-          canAddProject: user.can_add_project,
-          canDeleteProject: user.can_delete_project,
-          canManageInventory: user.can_manage_inventory,
-          canAddInventory: user.can_add_inventory,
-          canEditInventory: user.can_edit_inventory,
-          canDeleteInventory: user.can_delete_inventory,
-          canManageUsers: user.can_manage_users,
-          canEditUser: user.can_edit_user,
-          canAddUser: user.can_add_user,
-          canDeleteUser: user.can_delete_user
-        }
+        permissions
       };
     } catch (error) {
       console.error('Error finding user by username with permissions:', error);
@@ -191,6 +189,10 @@ class UserService {
       if (updateData.email) {
         updateFields.push('email = ?');
         values.push(updateData.email);
+      }
+      if (updateData.username) {
+        updateFields.push('username = ?');
+        values.push(updateData.username);
       }
       if (updateData.role || updateData.position_id) {
         if (updateData.position_id) {

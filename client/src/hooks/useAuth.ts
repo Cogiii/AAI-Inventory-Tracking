@@ -91,11 +91,23 @@ export const useAuth = () => {
     setError(null);
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const response = await AuthService.getProfile();
+      if (response.success && response.data.user) {
+        setUser(response.data.user);
+      }
+    } catch (err) {
+      console.error('Failed to refresh user:', err);
+    }
+  }, []);
+
   return {
     login,
     logout,
     isAuthenticated,
     validateTokenWithBackend,
+    refreshUser,
     user,
     isLoading,
     isLoggingIn,

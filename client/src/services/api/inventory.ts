@@ -320,6 +320,14 @@ export interface TransferFormData {
   notes?: string;
 }
 
+// Out stock types
+export interface OutStockFormData {
+  location_id: number;
+  quantity: number;
+  reference_number?: string;
+  notes?: string;
+}
+
 // Get item locations with quantities
 export const getItemLocations = async (id: string | number): Promise<ItemLocationsResponse> => {
   const { data } = await api.get(`/inventory/${id}/locations`);
@@ -347,5 +355,11 @@ export const transferStock = async (id: string | number, transferData: TransferF
 // Get delivery and adjustment history
 export const getDeliveryHistory = async (id: string | number): Promise<DeliveryHistoryResponse> => {
   const { data } = await api.get(`/inventory/${id}/deliveries`);
+  return data;
+};
+
+// Out stock - return excess products to client
+export const outStock = async (id: string | number, outStockData: OutStockFormData) => {
+  const { data } = await api.post(`/inventory/${id}/outstock`, outStockData);
   return data;
 };

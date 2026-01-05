@@ -517,7 +517,7 @@ router.get('/:id', auth, async (req, res) => {
 // @route   POST /api/inventory
 // @desc    Create new inventory item
 // @access  Private (requires canAddInventory permission)
-router.post('/', auth, requirePermission('canAddInventory'), validate(schemas.createInventoryItem), async (req, res) => {
+router.post('/', auth, requirePermission('inventory', 'add'), validate(schemas.createInventoryItem), async (req, res) => {
   try {
     const {
       type,
@@ -640,7 +640,7 @@ router.post('/', auth, requirePermission('canAddInventory'), validate(schemas.cr
 // @route   PUT /api/inventory/:id
 // @desc    Update inventory item
 // @access  Private (requires canEditInventory permission)
-router.put('/:id', auth, requirePermission('canEditInventory'), validate(schemas.updateInventoryItem), async (req, res) => {
+router.put('/:id', auth, requirePermission('inventory', 'edit'), validate(schemas.updateInventoryItem), async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -801,7 +801,7 @@ router.put('/:id', auth, requirePermission('canEditInventory'), validate(schemas
 // @route   DELETE /api/inventory/:id
 // @desc    Delete inventory item
 // @access  Private (requires canDeleteInventory permission)
-router.delete('/:id', auth, requirePermission('canDeleteInventory'), async (req, res) => {
+router.delete('/:id', auth, requirePermission('inventory', 'delete'), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -1566,15 +1566,15 @@ router.post('/:id/adjustment', auth, async (req, res) => {
     const { id } = req.params;
     const { location_id, quantity, reason } = req.body;
 
-    // Check if user has admin permission
-    const userPermissions = req.user?.permissions;
+    // Check if user has edit permission for inventory
+    const permissions = req.user?.permissions || {};
+    const inventoryPerms = permissions.inventory || [];
     const isAdmin = req.user?.positionName === 'Administrator';
-    const hasPermission = userPermissions && userPermissions.canManageInventory;
 
-    if (!isAdmin && !hasPermission) {
+    if (!isAdmin && !inventoryPerms.includes('edit')) {
       return res.status(403).json({
         success: false,
-        error: 'Only administrators can make quantity adjustments'
+        error: 'You do not have permission to adjust inventory quantities'
       });
     }
 
@@ -1869,6 +1869,136 @@ router.post('/:id/transfer', auth, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Server error transferring stock'
+    });
+  }
+});
+
+// @route   POST /api/inventory/:id/outstock
+// @desc    Remove stock from location (return excess to client)
+// @access  Private (requires inventory edit permission)
+router.post('/:id/outstock', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { location_id, quantity, reference_number, notes } = req.body;
+
+    // Check if user has edit permission for inventory
+    const permissions = req.user?.permissions || {};
+    const inventoryPerms = permissions.inventory || [];
+    const isAdmin = req.user?.positionName === 'Administrator';
+
+    if (!isAdmin && !inventoryPerms.includes('edit')) {
+      return res.status(403).json({
+        success: false,
+        error: 'You do not have permission to perform this action'
+      });
+    }
+
+    // Validate required fields
+    if (!location_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Location is required'
+      });
+    }
+
+    if (!quantity || quantity <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Quantity must be greater than 0'
+      });
+    }
+
+    // Check if item exists
+    const [itemRows] = await pool.execute('SELECT id, name FROM item WHERE id = ?', [id]);
+
+    if (itemRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Inventory item not found'
+      });
+    }
+
+    // Check if location exists
+    const [locationRows] = await pool.execute('SELECT id, name FROM location WHERE id = ?', [location_id]);
+
+    if (locationRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Location not found'
+      });
+    }
+
+    const itemName = itemRows[0].name;
+    const locationName = locationRows[0].name;
+
+    // Check if item_location record exists and has enough stock
+    const [existingItemLocation] = await pool.execute(
+      'SELECT id, quantity, reserved_quantity, damaged_quantity, lost_quantity FROM item_location WHERE item_id = ? AND location_id = ?',
+      [id, location_id]
+    );
+
+    if (existingItemLocation.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No stock exists at this location'
+      });
+    }
+
+    const currentRecord = existingItemLocation[0];
+    const availableQuantity = currentRecord.quantity - currentRecord.reserved_quantity - currentRecord.damaged_quantity - currentRecord.lost_quantity;
+
+    if (quantity > availableQuantity) {
+      return res.status(400).json({
+        success: false,
+        error: `Insufficient available stock. Available: ${availableQuantity}, Requested: ${quantity}`
+      });
+    }
+
+    // Decrease quantity in item_location
+    await pool.execute(`
+      UPDATE item_location
+      SET quantity = quantity - ?, updated_at = NOW()
+      WHERE item_id = ? AND location_id = ?
+    `, [quantity, id, location_id]);
+
+    // Create delivery_log entry with type='out'
+    await pool.execute(`
+      INSERT INTO delivery_log (item_id, location_id, quantity, type, notes, reference_number, performed_by, created_at)
+      VALUES (?, ?, ?, 'out', ?, ?, ?, NOW())
+    `, [id, location_id, quantity, notes || null, reference_number || null, req.user.id]);
+
+    // Create activity log
+    await pool.execute(`
+      INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
+      VALUES (?, 'stock_out', 'item', ?, ?, NOW())
+    `, [
+      req.user.id,
+      id,
+      `Removed ${quantity} units from "${locationName}" (returned to client)${reference_number ? ` (Ref: ${reference_number})` : ''}`
+    ]);
+
+    // Create inventory log
+    await pool.execute(`
+      INSERT INTO inventory_log (item_id, log_type, quantity, from_location_id, handled_by, reference_no, remarks, created_at)
+      VALUES (?, 'out', ?, ?, ?, ?, ?, NOW())
+    `, [id, quantity, location_id, req.user.id, reference_number || null, `Stock out from ${locationName}${notes ? `: ${notes}` : ''}`]);
+
+    res.status(200).json({
+      success: true,
+      message: 'Stock removed successfully',
+      data: {
+        item_id: parseInt(id),
+        location_id: location_id,
+        quantity_removed: quantity,
+        reference_number: reference_number || null
+      }
+    });
+
+  } catch (error) {
+    console.error('Out stock error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error removing stock'
     });
   }
 });

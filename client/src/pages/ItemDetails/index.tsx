@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import ConfirmationModal from '@/components/ui/confirmation-modal'
 import Loader from '@/components/ui/Loader'
 import { useAuth } from '@/hooks/useAuth'
+import { hasPermission } from '@/utils/permissions'
 import {
   getInventoryItem,
   getLocations,
@@ -14,6 +15,7 @@ import {
   getItemActivity,
   getItemLocations,
   addDelivery,
+  outStock,
   adjustQuantity,
   transferStock,
   type ItemLocation
@@ -30,12 +32,14 @@ import {
   ReportIssueModal,
   ActivityHistoryCard,
   ReservationsCard,
-  AddDeliveryModal,
+  AddStockModal,
+  OutStockModal,
   AdjustQuantityModal,
   TransferStockModal,
   LocationQuantitiesCard
 } from './components'
-import type { DeliveryFormState } from './components/AddDeliveryModal'
+import type { StockFormState } from './components/AddStockModal'
+import type { OutStockFormState } from './components/OutStockModal'
 import type { AdjustmentFormState } from './components/AdjustQuantityModal'
 import type { TransferFormState } from './components/TransferStockModal'
 
@@ -85,8 +89,10 @@ const ItemDetails = () => {
   const [errorModalOpen, setErrorModalOpen] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
 
-  // Check if user is admin
-  const isAdmin = user?.positionName === 'Administrator' || user?.permissions?.canManageInventory
+  // Check if user is admin or has inventory edit permission
+  const isAdmin = user?.positionName === 'Administrator'
+  const canEditInventory = hasPermission(user?.permissions, 'inventory', 'edit')
+  const canDeleteInventory = hasPermission(user?.permissions, 'inventory', 'delete')
 
   // Quick Action Modals
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -95,7 +101,8 @@ const ItemDetails = () => {
   const [reportIssueModalOpen, setReportIssueModalOpen] = useState(false)
 
   // Multi-warehouse modals
-  const [addDeliveryModalOpen, setAddDeliveryModalOpen] = useState(false)
+  const [addStockModalOpen, setAddStockModalOpen] = useState(false)
+  const [outStockModalOpen, setOutStockModalOpen] = useState(false)
   const [adjustQuantityModalOpen, setAdjustQuantityModalOpen] = useState(false)
   const [transferStockModalOpen, setTransferStockModalOpen] = useState(false)
 
@@ -131,7 +138,14 @@ const ItemDetails = () => {
   })
 
   // Multi-warehouse form states
-  const [deliveryForm, setDeliveryForm] = useState<DeliveryFormState>({
+  const [stockForm, setStockForm] = useState<StockFormState>({
+    location_id: null,
+    quantity: 0,
+    reference_number: '',
+    notes: ''
+  })
+
+  const [outStockForm, setOutStockForm] = useState<OutStockFormState>({
     location_id: null,
     quantity: 0,
     reference_number: '',
@@ -156,7 +170,7 @@ const ItemDetails = () => {
 
   // Discard changes confirmation modal
   const [discardModalOpen, setDiscardModalOpen] = useState(false)
-  const [pendingCloseModal, setPendingCloseModal] = useState<'edit' | 'quantity' | 'location' | 'issue' | 'delivery' | 'adjustment' | 'transfer' | null>(null)
+  const [pendingCloseModal, setPendingCloseModal] = useState<'edit' | 'quantity' | 'location' | 'issue' | 'stock' | 'outstock' | 'adjustment' | 'transfer' | null>(null)
 
   const fetchItem = async () => {
     if (!id) return
@@ -306,8 +320,12 @@ const ItemDetails = () => {
     setIssueForm({ issue_type: 'damage', quantity: 1, description: '' })
   }
 
-  const resetDeliveryForm = () => {
-    setDeliveryForm({ location_id: null, quantity: 0, reference_number: '', notes: '' })
+  const resetStockForm = () => {
+    setStockForm({ location_id: null, quantity: 0, reference_number: '', notes: '' })
+  }
+
+  const resetOutStockForm = () => {
+    setOutStockForm({ location_id: null, quantity: 0, reference_number: '', notes: '' })
   }
 
   const resetAdjustmentForm = () => {
@@ -319,8 +337,12 @@ const ItemDetails = () => {
   }
 
   // Check if multi-warehouse forms have unsaved changes
-  const hasDeliveryChanges = () => {
-    return deliveryForm.location_id !== null || deliveryForm.quantity > 0 || deliveryForm.reference_number !== '' || deliveryForm.notes !== ''
+  const hasStockChanges = () => {
+    return stockForm.location_id !== null || stockForm.quantity > 0 || stockForm.reference_number !== '' || stockForm.notes !== ''
+  }
+
+  const hasOutStockChanges = () => {
+    return outStockForm.location_id !== null || outStockForm.quantity > 0 || outStockForm.reference_number !== '' || outStockForm.notes !== ''
   }
 
   const hasAdjustmentChanges = () => {
@@ -368,12 +390,21 @@ const ItemDetails = () => {
     }
   }
 
-  const handleCloseDeliveryModal = () => {
-    if (hasDeliveryChanges()) {
-      setPendingCloseModal('delivery')
+  const handleCloseStockModal = () => {
+    if (hasStockChanges()) {
+      setPendingCloseModal('stock')
       setDiscardModalOpen(true)
     } else {
-      setAddDeliveryModalOpen(false)
+      setAddStockModalOpen(false)
+    }
+  }
+
+  const handleCloseOutStockModal = () => {
+    if (hasOutStockChanges()) {
+      setPendingCloseModal('outstock')
+      setDiscardModalOpen(true)
+    } else {
+      setOutStockModalOpen(false)
     }
   }
 
@@ -414,9 +445,13 @@ const ItemDetails = () => {
         resetIssueForm()
         setReportIssueModalOpen(false)
         break
-      case 'delivery':
-        resetDeliveryForm()
-        setAddDeliveryModalOpen(false)
+      case 'stock':
+        resetStockForm()
+        setAddStockModalOpen(false)
+        break
+      case 'outstock':
+        resetOutStockForm()
+        setOutStockModalOpen(false)
         break
       case 'adjustment':
         resetAdjustmentForm()
@@ -455,9 +490,14 @@ const ItemDetails = () => {
     setReportIssueModalOpen(true)
   }
 
-  const handleAddDelivery = () => {
-    resetDeliveryForm()
-    setAddDeliveryModalOpen(true)
+  const handleAddStock = () => {
+    resetStockForm()
+    setAddStockModalOpen(true)
+  }
+
+  const handleOutStock = () => {
+    resetOutStockForm()
+    setOutStockModalOpen(true)
   }
 
   const handleAdjustQuantity = () => {
@@ -593,30 +633,60 @@ const ItemDetails = () => {
     }
   }
 
-  const handleDeliverySubmit = async () => {
-    if (!id || !deliveryForm.location_id || deliveryForm.quantity <= 0) return
+  const handleStockSubmit = async () => {
+    if (!id || !stockForm.location_id || stockForm.quantity <= 0) return
 
     try {
       setSaving(true)
       const response = await addDelivery(id, {
-        location_id: deliveryForm.location_id,
-        quantity: deliveryForm.quantity,
-        reference_number: deliveryForm.reference_number || undefined,
-        notes: deliveryForm.notes || undefined
+        location_id: stockForm.location_id,
+        quantity: stockForm.quantity,
+        reference_number: stockForm.reference_number || undefined,
+        notes: stockForm.notes || undefined
       })
       if (response.success) {
         await fetchItem()
         await fetchActivities()
         await fetchItemLocations()
-        setAddDeliveryModalOpen(false)
-        resetDeliveryForm()
+        setAddStockModalOpen(false)
+        resetStockForm()
       } else {
-        setErrorMessage(response.error || 'Failed to add delivery')
+        setErrorMessage(response.error || 'Failed to add stock')
         setErrorModalOpen(true)
       }
     } catch (error: any) {
-      console.error('Error adding delivery:', error)
-      setErrorMessage(error?.response?.data?.error || 'Failed to add delivery')
+      console.error('Error adding stock:', error)
+      setErrorMessage(error?.response?.data?.error || 'Failed to add stock')
+      setErrorModalOpen(true)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleOutStockSubmit = async () => {
+    if (!id || !outStockForm.location_id || outStockForm.quantity <= 0) return
+
+    try {
+      setSaving(true)
+      const response = await outStock(id, {
+        location_id: outStockForm.location_id,
+        quantity: outStockForm.quantity,
+        reference_number: outStockForm.reference_number || undefined,
+        notes: outStockForm.notes || undefined
+      })
+      if (response.success) {
+        await fetchItem()
+        await fetchActivities()
+        await fetchItemLocations()
+        setOutStockModalOpen(false)
+        resetOutStockForm()
+      } else {
+        setErrorMessage(response.error || 'Failed to remove stock')
+        setErrorModalOpen(true)
+      }
+    } catch (error: any) {
+      console.error('Error removing stock:', error)
+      setErrorMessage(error?.response?.data?.error || 'Failed to remove stock')
       setErrorModalOpen(true)
     } finally {
       setSaving(false)
@@ -771,10 +841,13 @@ const ItemDetails = () => {
           onMoveLocation={handleMoveLocation}
           onReportIssue={handleReportIssue}
           onDelete={() => setDeleteModalOpen(true)}
-          onAddDelivery={handleAddDelivery}
+          onAddStock={handleAddStock}
+          onOutStock={handleOutStock}
           onAdjustQuantity={handleAdjustQuantity}
           onTransferStock={handleTransferStock}
-          isAdmin={isAdmin}
+          isAdmin={isAdmin || false}
+          canEditInventory={canEditInventory}
+          canDeleteInventory={canDeleteInventory}
         />
 
         {/* Activity History */}
@@ -820,14 +893,25 @@ const ItemDetails = () => {
       />
 
       {/* Multi-warehouse Modals */}
-      <AddDeliveryModal
-        isOpen={addDeliveryModalOpen}
-        onClose={handleCloseDeliveryModal}
-        deliveryForm={deliveryForm}
-        setDeliveryForm={setDeliveryForm}
-        onSubmit={handleDeliverySubmit}
+      <AddStockModal
+        isOpen={addStockModalOpen}
+        onClose={handleCloseStockModal}
+        stockForm={stockForm}
+        setStockForm={setStockForm}
+        onSubmit={handleStockSubmit}
         saving={saving}
         availableLocations={availableLocations}
+      />
+
+      <OutStockModal
+        isOpen={outStockModalOpen}
+        onClose={handleCloseOutStockModal}
+        outStockForm={outStockForm}
+        setOutStockForm={setOutStockForm}
+        onSubmit={handleOutStockSubmit}
+        saving={saving}
+        availableLocations={availableLocations}
+        itemLocations={itemLocations}
       />
 
       <AdjustQuantityModal

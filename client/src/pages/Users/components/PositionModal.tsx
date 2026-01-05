@@ -4,6 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/modal';
 import { ConfirmationModal } from '@/components/ui';
 import type { Position } from '@/services/api/users';
+import type { Permissions, PermissionModule, PermissionAction } from '@/types';
+import {
+  createEmptyPermissions,
+  PERMISSION_MODULES,
+  PERMISSION_ACTIONS,
+  MODULE_LABELS,
+  ACTION_LABELS
+} from '@/utils/permissions';
 
 interface PositionModalProps {
   isOpen: boolean;
@@ -22,20 +30,8 @@ const PositionModal: React.FC<PositionModalProps> = ({
 }) => {
   const [formData, setFormData] = useState({
     name: '',
-    permissions: {
-      canManageProjects: false,
-      canEditProject: false,
-      canAddProject: false,
-      canDeleteProject: false,
-      canManageInventory: false,
-      canAddInventory: false,
-      canEditInventory: false,
-      canDeleteInventory: false,
-      canManageUsers: false,
-      canEditUser: false,
-      canAddUser: false,
-      canDeleteUser: false
-    }
+    description: '',
+    permissions: createEmptyPermissions()
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -43,20 +39,8 @@ const PositionModal: React.FC<PositionModalProps> = ({
   const [showDiscardConfirmation, setShowDiscardConfirmation] = useState(false);
   const [originalFormData, setOriginalFormData] = useState({
     name: '',
-    permissions: {
-      canManageProjects: false,
-      canEditProject: false,
-      canAddProject: false,
-      canDeleteProject: false,
-      canManageInventory: false,
-      canAddInventory: false,
-      canEditInventory: false,
-      canDeleteInventory: false,
-      canManageUsers: false,
-      canEditUser: false,
-      canAddUser: false,
-      canDeleteUser: false
-    }
+    description: '',
+    permissions: createEmptyPermissions()
   });
 
   const isEditing = !!position;
@@ -65,27 +49,16 @@ const PositionModal: React.FC<PositionModalProps> = ({
     if (position) {
       const data = {
         name: position.name,
-        permissions: { ...position.permissions }
+        description: position.description || '',
+        permissions: position.permissions || createEmptyPermissions()
       };
       setFormData(data);
       setOriginalFormData(data);
     } else {
       const defaultData = {
         name: '',
-        permissions: {
-          canManageProjects: false,
-          canEditProject: false,
-          canAddProject: false,
-          canDeleteProject: false,
-          canManageInventory: false,
-          canAddInventory: false,
-          canEditInventory: false,
-          canDeleteInventory: false,
-          canManageUsers: false,
-          canEditUser: false,
-          canAddUser: false,
-          canDeleteUser: false
-        }
+        description: '',
+        permissions: createEmptyPermissions()
       };
       setFormData(defaultData);
       setOriginalFormData(defaultData);
@@ -98,54 +71,44 @@ const PositionModal: React.FC<PositionModalProps> = ({
     return JSON.stringify(formData) !== JSON.stringify(originalFormData);
   }, [formData, originalFormData]);
 
-  const handlePermissionChange = (permission: string, checked: boolean) => {
+  const handlePermissionChange = (module: PermissionModule, action: PermissionAction, checked: boolean) => {
+    setFormData(prev => {
+      const currentActions = prev.permissions[module] || [];
+      let newActions: PermissionAction[];
+
+      if (checked) {
+        // Add action if not already present
+        newActions = currentActions.includes(action)
+          ? currentActions
+          : [...currentActions, action];
+      } else {
+        // Remove action
+        newActions = currentActions.filter(a => a !== action);
+      }
+
+      return {
+        ...prev,
+        permissions: {
+          ...prev.permissions,
+          [module]: newActions
+        }
+      };
+    });
+  };
+
+  const handleSelectAll = (module: PermissionModule, checked: boolean) => {
     setFormData(prev => ({
       ...prev,
       permissions: {
         ...prev.permissions,
-        [permission]: checked
+        [module]: checked ? [...PERMISSION_ACTIONS] : []
       }
     }));
+  };
 
-    // Auto-enable all sub-permissions when "manage" permission is enabled
-    if (checked && permission.startsWith('canManage')) {
-      const area = permission.replace('canManage', '').toLowerCase();
-      const relatedPermissions: Record<string, string[]> = {
-        projects: ['canEditProject', 'canAddProject', 'canDeleteProject'],
-        inventory: ['canEditInventory', 'canAddInventory', 'canDeleteInventory'],
-        users: ['canEditUser', 'canAddUser', 'canDeleteUser']
-      };
-
-      if (relatedPermissions[area]) {
-        setFormData(prev => ({
-          ...prev,
-          permissions: {
-            ...prev.permissions,
-            ...relatedPermissions[area].reduce((acc, perm) => ({ ...acc, [perm]: true }), {})
-          }
-        }));
-      }
-    }
-
-    // Auto-disable "manage" permission when all sub-permissions are disabled
-    if (!checked && !permission.startsWith('canManage')) {
-      const area = permission.replace(/^can(Edit|Add|Delete)/, '').toLowerCase();
-      const managePermission = `canManage${area.charAt(0).toUpperCase() + area.slice(1)}s`;
-
-      setFormData(prev => {
-        const otherPermissions = Object.entries(prev.permissions)
-          .filter(([key]) => key !== permission && key !== managePermission && key.toLowerCase().includes(area))
-          .some(([, value]) => value);
-
-        return {
-          ...prev,
-          permissions: {
-            ...prev.permissions,
-            [managePermission]: otherPermissions
-          }
-        };
-      });
-    }
+  const isAllSelected = (module: PermissionModule): boolean => {
+    const actions = formData.permissions[module] || [];
+    return PERMISSION_ACTIONS.every(action => actions.includes(action));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -180,36 +143,6 @@ const PositionModal: React.FC<PositionModalProps> = ({
     onClose();
   };
 
-  const permissionGroups = [
-    {
-      title: 'Project Management',
-      manage: 'canManageProjects',
-      permissions: [
-        { key: 'canEditProject', label: 'Edit Projects' },
-        { key: 'canAddProject', label: 'Add Projects' },
-        { key: 'canDeleteProject', label: 'Delete Projects' }
-      ]
-    },
-    {
-      title: 'Inventory Management',
-      manage: 'canManageInventory',
-      permissions: [
-        { key: 'canEditInventory', label: 'Edit Inventory' },
-        { key: 'canAddInventory', label: 'Add Inventory' },
-        { key: 'canDeleteInventory', label: 'Delete Inventory' }
-      ]
-    },
-    {
-      title: 'User Management',
-      manage: 'canManageUsers',
-      permissions: [
-        { key: 'canEditUser', label: 'Edit Users' },
-        { key: 'canAddUser', label: 'Add Users' },
-        { key: 'canDeleteUser', label: 'Delete Users' }
-      ]
-    }
-  ];
-
   return (
     <>
     <Modal
@@ -243,6 +176,22 @@ const PositionModal: React.FC<PositionModalProps> = ({
             />
           </div>
 
+          {/* Position Description */}
+          <div>
+            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+              Description
+            </label>
+            <textarea
+              id="description"
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Enter position description (optional)"
+              rows={2}
+              disabled={isLoading}
+            />
+          </div>
+
           {/* Permissions */}
           <div>
             <div className="flex items-center gap-2 mb-4">
@@ -250,34 +199,36 @@ const PositionModal: React.FC<PositionModalProps> = ({
               <h3 className="text-lg font-semibold text-gray-900">Permissions</h3>
             </div>
             <div className="space-y-4">
-              {permissionGroups.map((group) => (
-                <div key={group.title} className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center mb-3">
-                    <input
-                      type="checkbox"
-                      id={group.manage}
-                      checked={formData.permissions[group.manage as keyof typeof formData.permissions]}
-                      onChange={(e) => handlePermissionChange(group.manage, e.target.checked)}
-                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                      disabled={isLoading}
-                    />
-                    <label htmlFor={group.manage} className="ml-2 text-sm font-semibold text-gray-900">
-                      {group.title} - Full Access
-                    </label>
+              {PERMISSION_MODULES.map((module) => (
+                <div key={module} className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id={`${module}-all`}
+                        checked={isAllSelected(module)}
+                        onChange={(e) => handleSelectAll(module, e.target.checked)}
+                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                        disabled={isLoading}
+                      />
+                      <label htmlFor={`${module}-all`} className="ml-2 text-sm font-semibold text-gray-900">
+                        {MODULE_LABELS[module]} - Full Access
+                      </label>
+                    </div>
                   </div>
-                  <div className="ml-6 space-y-2">
-                    {group.permissions.map((perm) => (
-                      <div key={perm.key} className="flex items-center">
+                  <div className="ml-6 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {PERMISSION_ACTIONS.map((action) => (
+                      <div key={`${module}-${action}`} className="flex items-center">
                         <input
                           type="checkbox"
-                          id={perm.key}
-                          checked={formData.permissions[perm.key as keyof typeof formData.permissions]}
-                          onChange={(e) => handlePermissionChange(perm.key, e.target.checked)}
+                          id={`${module}-${action}`}
+                          checked={(formData.permissions[module] || []).includes(action)}
+                          onChange={(e) => handlePermissionChange(module, action, e.target.checked)}
                           className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
                           disabled={isLoading}
                         />
-                        <label htmlFor={perm.key} className="ml-2 text-sm text-gray-700">
-                          {perm.label}
+                        <label htmlFor={`${module}-${action}`} className="ml-2 text-sm text-gray-700">
+                          {ACTION_LABELS[action]}
                         </label>
                       </div>
                     ))}

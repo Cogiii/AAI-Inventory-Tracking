@@ -3,45 +3,45 @@ import { Button } from '@/components/ui/button'
 import LocationSelector from '@/components/ui/location-selector'
 import type { Location } from '@/schemas'
 
-export interface DeliveryFormState {
+export interface StockFormState {
   location_id: number | null
   quantity: number
   reference_number: string
   notes: string
 }
 
-interface AddDeliveryModalProps {
+interface AddStockModalProps {
   isOpen: boolean
   onClose: () => void
-  deliveryForm: DeliveryFormState
-  setDeliveryForm: React.Dispatch<React.SetStateAction<DeliveryFormState>>
+  stockForm: StockFormState
+  setStockForm: React.Dispatch<React.SetStateAction<StockFormState>>
   onSubmit: () => void
   saving: boolean
   availableLocations: Location[]
 }
 
-const AddDeliveryModal = ({
+const AddStockModal = ({
   isOpen,
   onClose,
-  deliveryForm,
-  setDeliveryForm,
+  stockForm,
+  setStockForm,
   onSubmit,
   saving,
   availableLocations
-}: AddDeliveryModalProps) => {
+}: AddStockModalProps) => {
   const handleNumberChange = (value: string) => {
     const numValue = parseInt(value) || 0
-    setDeliveryForm(prev => ({ ...prev, quantity: Math.max(0, numValue) }))
+    setStockForm(prev => ({ ...prev, quantity: Math.max(0, numValue) }))
   }
 
   const handleTextChange = (field: 'reference_number' | 'notes', value: string) => {
-    setDeliveryForm(prev => ({ ...prev, [field]: value }))
+    setStockForm(prev => ({ ...prev, [field]: value }))
   }
 
-  const isValid = deliveryForm.location_id && deliveryForm.quantity > 0
+  const isValid = stockForm.location_id && stockForm.quantity > 0
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add Delivery" size="md">
+    <Modal isOpen={isOpen} onClose={onClose} title="Add Stock" size="md">
       <ModalBody>
         <div className="space-y-4">
           <div>
@@ -49,8 +49,8 @@ const AddDeliveryModal = ({
               Destination Location *
             </label>
             <LocationSelector
-              value={deliveryForm.location_id}
-              onChange={(locationId) => setDeliveryForm(prev => ({
+              value={stockForm.location_id}
+              onChange={(locationId) => setStockForm(prev => ({
                 ...prev,
                 location_id: locationId
               }))}
@@ -59,7 +59,7 @@ const AddDeliveryModal = ({
               locations={availableLocations}
             />
             <p className="mt-1 text-xs text-gray-500">
-              Select the warehouse or office where items were delivered
+              Select the warehouse or office where stock will be added
             </p>
           </div>
 
@@ -70,10 +70,10 @@ const AddDeliveryModal = ({
             <input
               type="number"
               min="1"
-              value={deliveryForm.quantity || ''}
+              value={stockForm.quantity || ''}
               onChange={(e) => handleNumberChange(e.target.value)}
               className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 transition-all duration-200 hover:border-gray-400 px-4 py-3"
-              placeholder="Enter quantity received"
+              placeholder="Enter quantity to add"
             />
           </div>
 
@@ -83,7 +83,7 @@ const AddDeliveryModal = ({
             </label>
             <input
               type="text"
-              value={deliveryForm.reference_number}
+              value={stockForm.reference_number}
               onChange={(e) => handleTextChange('reference_number', e.target.value)}
               className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 transition-all duration-200 hover:border-gray-400 px-4 py-3"
               placeholder="PO number, delivery receipt, etc."
@@ -95,17 +95,17 @@ const AddDeliveryModal = ({
               Notes
             </label>
             <textarea
-              value={deliveryForm.notes}
+              value={stockForm.notes}
               onChange={(e) => handleTextChange('notes', e.target.value)}
               rows={2}
               className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 transition-all duration-200 hover:border-gray-400 px-4 py-3"
-              placeholder="Additional notes about this delivery..."
+              placeholder="Additional notes about this stock addition..."
             />
           </div>
 
           <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
             <p className="text-sm text-blue-700">
-              This delivery will increase the item's available quantity at the selected location.
+              This will increase the item's available quantity at the selected location.
             </p>
           </div>
         </div>
@@ -115,11 +115,11 @@ const AddDeliveryModal = ({
           Cancel
         </Button>
         <Button onClick={onSubmit} disabled={saving || !isValid}>
-          {saving ? 'Adding...' : 'Add Delivery'}
+          {saving ? 'Adding...' : 'Add Stock'}
         </Button>
       </ModalFooter>
     </Modal>
   )
 }
 
-export default AddDeliveryModal
+export default AddStockModal

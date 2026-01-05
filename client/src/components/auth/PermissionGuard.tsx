@@ -2,17 +2,21 @@ import type { FC, ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Shield } from 'lucide-react';
+import type { PermissionModule, PermissionAction } from '@/types';
+import { hasPermission, MODULE_LABELS, ACTION_LABELS } from '@/utils/permissions';
 
 interface PermissionGuardProps {
   children: ReactNode;
-  requiredPermission: string;
+  module: PermissionModule;
+  action: PermissionAction;
   fallbackPath?: string;
   showAccessDenied?: boolean;
 }
 
 const PermissionGuard: FC<PermissionGuardProps> = ({
   children,
-  requiredPermission,
+  module,
+  action,
   fallbackPath = '/dashboard',
   showAccessDenied = false
 }) => {
@@ -24,9 +28,9 @@ const PermissionGuard: FC<PermissionGuardProps> = ({
   }
 
   // Check if user has required permission
-  const hasPermission = user.permissions?.[requiredPermission as keyof typeof user.permissions];
+  const userHasPermission = hasPermission(user.permissions, module, action);
 
-  if (!hasPermission) {
+  if (!userHasPermission) {
     if (showAccessDenied) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -38,7 +42,7 @@ const PermissionGuard: FC<PermissionGuardProps> = ({
                 You don't have permission to access this page. Please contact your administrator if you believe this is an error.
               </p>
               <div className="space-y-2 text-sm text-gray-500">
-                <p><strong>Required Permission:</strong> {requiredPermission}</p>
+                <p><strong>Required Permission:</strong> {MODULE_LABELS[module]} - {ACTION_LABELS[action]}</p>
                 <p><strong>Your Position:</strong> {user.positionName || 'Unknown'}</p>
               </div>
               <div className="mt-6">
@@ -54,7 +58,7 @@ const PermissionGuard: FC<PermissionGuardProps> = ({
         </div>
       );
     }
-    
+
     return <Navigate to={fallbackPath} replace />;
   }
 

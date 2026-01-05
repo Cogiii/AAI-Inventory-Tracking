@@ -414,8 +414,9 @@ router.get('/debug-permissions', auth, async (req, res) => {
       user: req.user,
       hasPermissions: !!req.user?.permissions,
       permissions: req.user?.permissions || null,
-      canManageProjects: req.user?.permissions?.canManageProjects,
-      canEditProject: req.user?.permissions?.canEditProject
+      projectPermissions: req.user?.permissions?.projects || [],
+      inventoryPermissions: req.user?.permissions?.inventory || [],
+      userPermissions: req.user?.permissions?.users || []
     }
   });
 });
@@ -1065,12 +1066,12 @@ router.delete('/project-days/:id', auth, async (req, res) => {
  * Supports multi-warehouse with source_location_id
  */
 router.post('/project-items', auth, async (req, res) => {
-  // Check permissions - user must be able to manage projects or add to projects
+  // Check permissions - user must be able to add to projects
   const userPermissions = req.user?.permissions;
 
   // Allow if user is Administrator or has proper permissions
   const isAdmin = req.user?.positionName === 'Administrator';
-  const hasPermissions = userPermissions && (userPermissions.canManageProjects || userPermissions.canAddProject);
+  const hasPermissions = userPermissions?.projects?.includes('add');
 
   if (!isAdmin && !hasPermissions) {
     return res.status(403).json({
@@ -1343,13 +1344,9 @@ router.post('/project-items', auth, async (req, res) => {
  * Update project item quantities
  */
 router.put('/project-items/:id', auth, async (req, res) => {
-  // Check permissions - user must be able to manage projects or edit projects
+  // Check permissions - user must be able to edit projects
   const userPermissions = req.user?.permissions;
-  
-  // Debug logging
-  console.log('PUT project-items - User permissions:', userPermissions);
-  console.log('PUT project-items - User position name:', req.user?.positionName);
-  
+
   // Allow access for Administrator position or if they have the right permissions
   if (!req.user) {
     return res.status(403).json({
@@ -1357,21 +1354,15 @@ router.put('/project-items/:id', auth, async (req, res) => {
       message: 'Authentication required'
     });
   }
-  
+
   // Allow if user is Administrator or has proper permissions
   const isAdmin = req.user.positionName === 'Administrator';
-  const hasPermissions = userPermissions && (userPermissions.canManageProjects || userPermissions.canEditProject);
-  
+  const hasPermissions = userPermissions?.projects?.includes('edit');
+
   if (!isAdmin && !hasPermissions) {
     return res.status(403).json({
       success: false,
-      message: 'Insufficient permissions to update project items',
-      debug: {
-        isAdmin,
-        hasPermissions,
-        positionName: req.user.positionName,
-        permissions: userPermissions
-      }
+      message: 'Insufficient permissions to update project items'
     });
   }
   const { id } = req.params;
@@ -1478,13 +1469,13 @@ router.put('/project-items/:id', auth, async (req, res) => {
  * Remove item from project
  */
 router.delete('/project-items/:id', auth, async (req, res) => {
-  // Check permissions - user must be able to manage projects or delete projects
+  // Check permissions - user must be able to delete projects
   const userPermissions = req.user?.permissions;
-  
+
   // Allow if user is Administrator or has proper permissions
   const isAdmin = req.user?.positionName === 'Administrator';
-  const hasPermissions = userPermissions && (userPermissions.canManageProjects || userPermissions.canDeleteProject);
-  
+  const hasPermissions = userPermissions?.projects?.includes('delete');
+
   if (!isAdmin && !hasPermissions) {
     return res.status(403).json({
       success: false,

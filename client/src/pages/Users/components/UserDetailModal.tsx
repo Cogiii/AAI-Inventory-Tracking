@@ -98,11 +98,17 @@ const UserDetailModal: FC<UserDetailModalProps> = ({
   };
 
   // Role-based action permissions
-  const canEdit = currentUserRole === 'Administrator' || 
-    (currentUserRole === 'Marketing Manager' && user.position_name !== 'Administrator');
-  
-  const canToggleStatus = canEdit;
-  const canDelete = canEdit;
+  const isTargetAdmin = user.position_name === 'Administrator';
+  const isCurrentUserAdmin = currentUserRole === 'Administrator';
+
+  // Only admins can edit other admins; non-admins can edit non-admin users
+  const canEdit = isCurrentUserAdmin || (!isTargetAdmin && currentUserRole === 'Marketing Manager');
+
+  // Non-admins cannot deactivate/activate Administrator users
+  const canToggleStatus = isCurrentUserAdmin || (!isTargetAdmin && canEdit);
+
+  // Non-admins cannot delete Administrator users
+  const canDelete = isCurrentUserAdmin || (!isTargetAdmin && canEdit);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="User Details" size="lg">

@@ -5,6 +5,16 @@ export interface BaseEntity {
   updatedAt: string;
 }
 
+// Permission types
+export type PermissionModule = 'projects' | 'inventory' | 'users';
+export type PermissionAction = 'view' | 'add' | 'edit' | 'delete';
+
+export interface Permissions {
+  projects: PermissionAction[];
+  inventory: PermissionAction[];
+  users: PermissionAction[];
+}
+
 // User related types
 export interface User {
   id: number;
@@ -20,20 +30,7 @@ export interface User {
   lastLogin?: string;
   positionId?: number;
   positionName?: string;
-  permissions?: {
-    canManageProjects: boolean;
-    canEditProject: boolean;
-    canAddProject: boolean;
-    canDeleteProject: boolean;
-    canManageInventory: boolean;
-    canAddInventory: boolean;
-    canEditInventory: boolean;
-    canDeleteInventory: boolean;
-    canManageUsers: boolean;
-    canEditUser: boolean;
-    canAddUser: boolean;
-    canDeleteUser: boolean;
-  };
+  permissions?: Permissions;
 }
 
 export type UserRole = 'Administrator' | 'Marketing Manager' | 'Staff Member';

@@ -6,7 +6,8 @@ import {
   Package,
   FolderOpen,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Settings
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Logo, NavigationSection, UserProfile } from './components';
@@ -24,6 +25,7 @@ const Sidebar: FC<SidebarProps> = ({ isExpanded = true, onClose, onToggleExpand 
 
   const generalNavigation: NavigationItemConfig[] = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
+    { name: 'Settings', href: '/settings', icon: Settings },
   ];
 
   const recordsNavigation: NavigationItemConfig[] = [
@@ -33,7 +35,7 @@ const Sidebar: FC<SidebarProps> = ({ isExpanded = true, onClose, onToggleExpand 
   ];
 
   const administrationNavigation: NavigationItemConfig[] = [
-    { name: 'User Management', href: '/users', icon: Users, requiredPermission: 'canManageUsers' },
+    { name: 'User Management', href: '/users', icon: Users, requiredPermission: { module: 'users', action: 'view' } },
   ];
 
   const handleLogout = async () => {

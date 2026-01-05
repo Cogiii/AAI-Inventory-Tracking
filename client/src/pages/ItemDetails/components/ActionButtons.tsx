@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Edit, Trash2, AlertTriangle, MapPin, Package, Truck, ArrowLeftRight, Settings } from 'lucide-react'
+import { Edit, Trash2, AlertTriangle, MapPin, Package, PackagePlus, PackageMinus, ArrowLeftRight, Settings } from 'lucide-react'
 // Note: Package is used in Stock Management section
 
 interface ActionButtonsProps {
@@ -8,10 +8,13 @@ interface ActionButtonsProps {
   onMoveLocation: () => void
   onReportIssue: () => void
   onDelete: () => void
-  onAddDelivery?: () => void
+  onAddStock?: () => void
+  onOutStock?: () => void
   onAdjustQuantity?: () => void
   onTransferStock?: () => void
   isAdmin?: boolean
+  canEditInventory?: boolean
+  canDeleteInventory?: boolean
 }
 
 const ActionButtons = ({
@@ -19,10 +22,13 @@ const ActionButtons = ({
   onMoveLocation,
   onReportIssue,
   onDelete,
-  onAddDelivery,
+  onAddStock,
+  onOutStock,
   onAdjustQuantity,
   onTransferStock,
-  isAdmin = false
+  isAdmin = false,
+  canEditInventory = false,
+  canDeleteInventory = false
 }: ActionButtonsProps) => {
   return (
     <div className="mb-8 space-y-4">
@@ -36,35 +42,53 @@ const ActionButtons = ({
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {/* Add Delivery */}
-            <Button
-              className="h-20 flex-col gap-2 hover:shadow-md transition-shadow bg-green-50 border-green-200 hover:bg-green-100 text-green-700"
-              variant="outline"
-              onClick={onAddDelivery}
-            >
-              <Truck className="h-5 w-5" />
-              <span className="text-xs font-medium">Add Delivery</span>
-            </Button>
+            {/* Add Stock (requires canEditInventory) */}
+            {(isAdmin || canEditInventory) && (
+              <Button
+                className="h-20 flex-col gap-2 hover:shadow-md transition-shadow bg-green-50 border-green-200 hover:bg-green-100 text-green-700"
+                variant="outline"
+                onClick={onAddStock}
+              >
+                <PackagePlus className="h-5 w-5" />
+                <span className="text-xs font-medium">Add Stock</span>
+              </Button>
+            )}
 
-            {/* Transfer Stock */}
-            <Button
-              className="h-20 flex-col gap-2 hover:shadow-md transition-shadow bg-blue-50 border-blue-200 hover:bg-blue-100 text-blue-700"
-              variant="outline"
-              onClick={onTransferStock}
-            >
-              <ArrowLeftRight className="h-5 w-5" />
-              <span className="text-xs font-medium">Transfer Stock</span>
-            </Button>
+            {/* Out Stock (requires canEditInventory) */}
+            {(isAdmin || canEditInventory) && (
+              <Button
+                className="h-20 flex-col gap-2 hover:shadow-md transition-shadow bg-orange-50 border-orange-200 hover:bg-orange-100 text-orange-700"
+                variant="outline"
+                onClick={onOutStock}
+              >
+                <PackageMinus className="h-5 w-5" />
+                <span className="text-xs font-medium">Out Stock</span>
+              </Button>
+            )}
 
-            {/* Report Issue */}
-            <Button
-              className="h-20 flex-col gap-2 hover:shadow-md transition-shadow bg-amber-50 border-amber-200 hover:bg-amber-100 text-amber-700"
-              variant="outline"
-              onClick={onReportIssue}
-            >
-              <AlertTriangle className="h-5 w-5" />
-              <span className="text-xs font-medium">Report Issue</span>
-            </Button>
+            {/* Transfer Stock (requires canEditInventory) */}
+            {(isAdmin || canEditInventory) && (
+              <Button
+                className="h-20 flex-col gap-2 hover:shadow-md transition-shadow bg-blue-50 border-blue-200 hover:bg-blue-100 text-blue-700"
+                variant="outline"
+                onClick={onTransferStock}
+              >
+                <ArrowLeftRight className="h-5 w-5" />
+                <span className="text-xs font-medium">Transfer Stock</span>
+              </Button>
+            )}
+
+            {/* Report Issue (requires canEditInventory) */}
+            {(isAdmin || canEditInventory) && (
+              <Button
+                className="h-20 flex-col gap-2 hover:shadow-md transition-shadow bg-amber-50 border-amber-200 hover:bg-amber-100 text-amber-700"
+                variant="outline"
+                onClick={onReportIssue}
+              >
+                <AlertTriangle className="h-5 w-5" />
+                <span className="text-xs font-medium">Report Issue</span>
+              </Button>
+            )}
 
             {/* Adjust Quantity (Admin Only) */}
             {isAdmin && (

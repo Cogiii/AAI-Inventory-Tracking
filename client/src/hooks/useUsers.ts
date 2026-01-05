@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usersApi, positionsApi, type User, type Position, type UsersListParams } from '@/services/api/users';
 import { useAuth } from './useAuth';
+import { hasPermission } from '@/utils/permissions';
 
 export const useUsers = () => {
   const { user: currentUser } = useAuth();
@@ -17,7 +18,7 @@ export const useUsers = () => {
   });
 
   const fetchUsers = useCallback(async (params: UsersListParams = {}) => {
-    if (!currentUser?.permissions?.canManageUsers) {
+    if (!hasPermission(currentUser?.permissions, 'users', 'view')) {
       setError('Access denied. You do not have permission to manage users.');
       return;
     }
@@ -100,7 +101,7 @@ export const useUsers = () => {
     if (user.id === currentUser.id) return true;
     
     // Only users with user management permissions can manage others
-    if (!currentUser.permissions?.canManageUsers) return false;
+    if (!hasPermission(currentUser.permissions, 'users', 'edit')) return false;
     
     // Non-administrators cannot manage Administrator users
     if (user.position_name === 'Administrator' && currentUser.positionName !== 'Administrator') {
@@ -121,7 +122,7 @@ export const useUsers = () => {
     toggleUserStatus,
     deleteUser,
     canManageUser,
-    hasPermission: currentUser?.permissions?.canManageUsers || false
+    hasPermission: hasPermission(currentUser?.permissions, 'users', 'view')
   };
 };
 
@@ -132,7 +133,7 @@ export const usePositions = () => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchPositions = useCallback(async () => {
-    if (!currentUser?.permissions?.canManageUsers) {
+    if (!hasPermission(currentUser?.permissions, 'users', 'view')) {
       setError('Access denied. You do not have permission to manage positions.');
       return;
     }
@@ -194,7 +195,7 @@ export const usePositions = () => {
   }, [fetchPositions]);
 
   const canEditPosition = useCallback((position: Position) => {
-    if (!currentUser?.permissions?.canManageUsers) return false;
+    if (!hasPermission(currentUser?.permissions, 'users', 'edit')) return false;
     
     // Administrator position cannot be edited
     if (position.name === 'Administrator') return false;
@@ -203,7 +204,7 @@ export const usePositions = () => {
   }, [currentUser]);
 
   useEffect(() => {
-    if (currentUser?.permissions?.canManageUsers) {
+    if (hasPermission(currentUser?.permissions, 'users', 'view')) {
       fetchPositions();
     }
   }, [fetchPositions, currentUser]);
@@ -217,6 +218,6 @@ export const usePositions = () => {
     updatePosition,
     deletePosition,
     canEditPosition,
-    hasPermission: currentUser?.permissions?.canManageUsers || false
+    hasPermission: hasPermission(currentUser?.permissions, 'users', 'view')
   };
 };

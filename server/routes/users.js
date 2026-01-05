@@ -11,17 +11,15 @@ const router = express.Router();
   @desc    Get all users with permissions check
   @access  Private - Requires user management permission
 */
-router.get('/', auth, requirePermission('canManageUsers'), async (req, res) => {
+router.get('/', auth, requirePermission('users', 'view'), async (req, res) => {
   try {
     const { page = 1, limit = 10, sort = 'created_at', order = 'desc', search = '', position_id } = req.query;
-    
+
     let query = `
       SELECT u.id, u.first_name, u.last_name, u.email, u.username,
              u.position_id, p.name as position_name, u.is_active,
              u.created_at, u.updated_at,
-             p.can_manage_projects, p.can_edit_project, p.can_add_project, p.can_delete_project,
-             p.can_manage_inventory, p.can_add_inventory, p.can_edit_inventory, p.can_delete_inventory,
-             p.can_manage_users, p.can_edit_user, p.can_add_user, p.can_delete_user
+             p.permissions
       FROM user u
       LEFT JOIN \`position\` p ON u.position_id = p.id
       WHERE 1=1
@@ -95,32 +93,35 @@ router.get('/', auth, requirePermission('canManageUsers'), async (req, res) => {
     const [users] = await pool.execute(query, paginatedParams);
 
     // Format users response with permissions
-    const usersResponse = users.map(user => ({
-      id: user.id,
-      first_name: user.first_name,
-      last_name: user.last_name,
-      email: user.email,
-      username: user.username,
-      position_id: user.position_id,
-      position_name: user.position_name,
-      is_active: user.is_active,
-      created_at: user.created_at,
-      updated_at: user.updated_at,
-      permissions: {
-        canManageProjects: Boolean(user.can_manage_projects),
-        canEditProject: Boolean(user.can_edit_project),
-        canAddProject: Boolean(user.can_add_project),
-        canDeleteProject: Boolean(user.can_delete_project),
-        canManageInventory: Boolean(user.can_manage_inventory),
-        canAddInventory: Boolean(user.can_add_inventory),
-        canEditInventory: Boolean(user.can_edit_inventory),
-        canDeleteInventory: Boolean(user.can_delete_inventory),
-        canManageUsers: Boolean(user.can_manage_users),
-        canEditUser: Boolean(user.can_edit_user),
-        canAddUser: Boolean(user.can_add_user),
-        canDeleteUser: Boolean(user.can_delete_user)
+    const usersResponse = users.map(user => {
+      // Parse JSON permissions (handle both string and object)
+      let permissions = { projects: [], inventory: [], users: [] };
+      if (user.permissions) {
+        if (typeof user.permissions === 'string') {
+          try {
+            permissions = JSON.parse(user.permissions);
+          } catch (e) {
+            console.error('Failed to parse user permissions JSON:', e);
+          }
+        } else {
+          permissions = user.permissions;
+        }
       }
-    }));
+
+      return {
+        id: user.id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        email: user.email,
+        username: user.username,
+        position_id: user.position_id,
+        position_name: user.position_name,
+        is_active: user.is_active,
+        created_at: user.created_at,
+        updated_at: user.updated_at,
+        permissions
+      };
+    });
 
     // Calculate pagination info
     const totalPages = Math.ceil(total / limit);
@@ -165,31 +166,67 @@ router.get('/', auth, requirePermission('canManageUsers'), async (req, res) => {
 router.get('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
-    
-    // Check if user is requesting their own profile or has admin/manager role
-    if (req.user.id !== id && !['admin', 'manager'].includes(req.user.role)) {
+
+    // Check if user is requesting their own profile or has user view permission
+    const isOwnProfile = req.user.id === parseInt(id);
+    const hasUserViewPermission = req.user.permissions?.users?.includes('view');
+    const isAdmin = req.user.positionName === 'Administrator';
+
+    if (!isOwnProfile && !hasUserViewPermission && !isAdmin) {
       return res.status(403).json({
         success: false,
         error: 'Access denied. You can only view your own profile.'
       });
     }
-    
-    const user = mockUsers.find(u => u.id === id);
-    
-    if (!user) {
+
+    const [users] = await pool.execute(`
+      SELECT u.id, u.first_name, u.last_name, u.email, u.username,
+             u.position_id, p.name as position_name, u.is_active,
+             u.created_at, u.updated_at, p.permissions
+      FROM user u
+      LEFT JOIN \`position\` p ON u.position_id = p.id
+      WHERE u.id = ?
+    `, [id]);
+
+    if (users.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'User not found'
       });
     }
 
-    // Remove password from response
-    const { password, ...userResponse } = user;
+    const user = users[0];
+
+    // Parse JSON permissions
+    let permissions = { projects: [], inventory: [], users: [] };
+    if (user.permissions) {
+      if (typeof user.permissions === 'string') {
+        try {
+          permissions = JSON.parse(user.permissions);
+        } catch (e) {
+          console.error('Failed to parse permissions JSON:', e);
+        }
+      } else {
+        permissions = user.permissions;
+      }
+    }
 
     res.json({
       success: true,
       data: {
-        user: userResponse
+        user: {
+          id: user.id,
+          first_name: user.first_name,
+          last_name: user.last_name,
+          email: user.email,
+          username: user.username,
+          position_id: user.position_id,
+          position_name: user.position_name,
+          is_active: user.is_active,
+          created_at: user.created_at,
+          updated_at: user.updated_at,
+          permissions
+        }
       }
     });
 
@@ -208,21 +245,28 @@ router.get('/:id', auth, async (req, res) => {
 router.put('/:id', auth, validate(schemas.updateUser), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, role } = req.body;
-    
-    const userIndex = mockUsers.findIndex(u => u.id === id);
-    if (userIndex === -1) {
+    const { first_name, last_name, email, position_id, is_active } = req.body;
+
+    // Check if user exists
+    const [userRows] = await pool.execute(
+      'SELECT u.*, p.name as position_name FROM user u LEFT JOIN `position` p ON u.position_id = p.id WHERE u.id = ?',
+      [id]
+    );
+
+    if (userRows.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'User not found'
       });
     }
 
-    // Check permissions
-    const isOwnProfile = req.user.id === id;
-    const isAdmin = req.user.role === 'admin';
+    const existingUser = userRows[0];
 
-    // Only admin can update other users or change roles
+    // Check permissions
+    const isOwnProfile = req.user.id === parseInt(id);
+    const isAdmin = req.user.positionName === 'Administrator';
+
+    // Only admin can update other users
     if (!isOwnProfile && !isAdmin) {
       return res.status(403).json({
         success: false,
@@ -230,18 +274,29 @@ router.put('/:id', auth, validate(schemas.updateUser), async (req, res) => {
       });
     }
 
-    // Only admin can change roles
-    if (role && !isAdmin) {
+    // Only admin can change position or active status
+    if ((position_id !== undefined || is_active !== undefined) && !isAdmin) {
       return res.status(403).json({
         success: false,
-        error: 'Access denied. Only admins can change user roles.'
+        error: 'Access denied. Only admins can change user position or status.'
+      });
+    }
+
+    // Prevent non-administrators from updating Administrator users
+    if (existingUser.position_name === 'Administrator' && !isAdmin) {
+      return res.status(403).json({
+        success: false,
+        error: 'Only administrators can update other administrators'
       });
     }
 
     // Check if email is being changed and if it already exists
-    if (email && email !== mockUsers[userIndex].email) {
-      const existingUser = mockUsers.find(u => u.email === email && u.id !== id);
-      if (existingUser) {
+    if (email && email !== existingUser.email) {
+      const [existingEmailRows] = await pool.execute(
+        'SELECT id FROM user WHERE email = ? AND id != ?',
+        [email, id]
+      );
+      if (existingEmailRows.length > 0) {
         return res.status(400).json({
           success: false,
           error: 'Email already in use'
@@ -249,25 +304,61 @@ router.put('/:id', auth, validate(schemas.updateUser), async (req, res) => {
       }
     }
 
-    // Update user
-    const updatedUser = {
-      ...mockUsers[userIndex],
-      ...(name && { name }),
-      ...(email && { email }),
-      ...(role && isAdmin && { role }),
-      updatedAt: new Date().toISOString()
-    };
+    // Build update query dynamically
+    const updateFields = [];
+    const updateValues = [];
 
-    mockUsers[userIndex] = updatedUser;
+    if (first_name !== undefined) {
+      updateFields.push('first_name = ?');
+      updateValues.push(first_name);
+    }
+    if (last_name !== undefined) {
+      updateFields.push('last_name = ?');
+      updateValues.push(last_name);
+    }
+    if (email !== undefined) {
+      updateFields.push('email = ?');
+      updateValues.push(email);
+    }
+    if (position_id !== undefined && isAdmin) {
+      updateFields.push('position_id = ?');
+      updateValues.push(position_id);
+    }
+    if (is_active !== undefined && isAdmin) {
+      updateFields.push('is_active = ?');
+      updateValues.push(is_active);
+    }
 
-    // Remove password from response
-    const { password, ...userResponse } = updatedUser;
+    if (updateFields.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No fields to update'
+      });
+    }
+
+    updateFields.push('updated_at = NOW()');
+    updateValues.push(id);
+
+    await pool.execute(
+      `UPDATE user SET ${updateFields.join(', ')} WHERE id = ?`,
+      updateValues
+    );
+
+    // Fetch updated user
+    const [updatedUserRows] = await pool.execute(
+      `SELECT u.id, u.first_name, u.last_name, u.email, u.username, u.position_id,
+              p.name as position_name, u.is_active, u.created_at, u.updated_at
+       FROM user u
+       LEFT JOIN \`position\` p ON u.position_id = p.id
+       WHERE u.id = ?`,
+      [id]
+    );
 
     res.json({
       success: true,
       message: 'User updated successfully',
       data: {
-        user: userResponse
+        user: updatedUserRows[0]
       }
     });
 
@@ -281,39 +372,63 @@ router.put('/:id', auth, validate(schemas.updateUser), async (req, res) => {
 });
 
 // @route   DELETE /api/users/:id
-// @desc    Delete user (Admin only)
+// @desc    Delete user (requires users delete permission)
 // @access  Private
-router.delete('/:id', auth, authorize('admin'), async (req, res) => {
+router.delete('/:id', auth, requirePermission('users', 'delete'), async (req, res) => {
   try {
     const { id } = req.params;
-    
-    // Prevent admin from deleting themselves
-    if (req.user.id === id) {
+
+    // Prevent user from deleting themselves
+    if (req.user.id === parseInt(id)) {
       return res.status(400).json({
         success: false,
         error: 'You cannot delete your own account'
       });
     }
-    
-    const userIndex = mockUsers.findIndex(u => u.id === id);
-    if (userIndex === -1) {
+
+    // Check if user exists
+    const [users] = await pool.execute(
+      'SELECT u.*, p.name as position_name FROM user u LEFT JOIN `position` p ON u.position_id = p.id WHERE u.id = ?',
+      [id]
+    );
+
+    if (users.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'User not found'
       });
     }
 
-    // Remove user from mock store
-    const deletedUser = mockUsers.splice(userIndex, 1)[0];
-    
-    // Remove password from response
-    const { password, ...userResponse } = deletedUser;
+    const user = users[0];
+
+    // Prevent deletion of Administrator users by non-administrators
+    if (user.position_name === 'Administrator' && req.user.positionName !== 'Administrator') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only administrators can delete other administrators'
+      });
+    }
+
+    // Delete the user
+    await pool.execute('DELETE FROM user WHERE id = ?', [id]);
+
+    // Log the activity
+    await pool.execute(`
+      INSERT INTO activity_log (user_id, action, entity, entity_id, description)
+      VALUES (?, 'delete', 'user', ?, ?)
+    `, [req.user.id, id, `Deleted user: ${user.first_name} ${user.last_name} (${user.email})`]);
 
     res.json({
       success: true,
       message: 'User deleted successfully',
       data: {
-        deletedUser: userResponse
+        deletedUser: {
+          id: user.id,
+          first_name: user.first_name,
+          last_name: user.last_name,
+          email: user.email,
+          username: user.username
+        }
       }
     });
 
@@ -327,42 +442,63 @@ router.delete('/:id', auth, authorize('admin'), async (req, res) => {
 });
 
 // @route   PUT /api/users/:id/deactivate
-// @desc    Deactivate user (Admin only)
+// @desc    Deactivate user (requires users edit permission)
 // @access  Private
-router.put('/:id/deactivate', auth, authorize('admin'), async (req, res) => {
+router.put('/:id/deactivate', auth, requirePermission('users', 'edit'), async (req, res) => {
   try {
     const { id } = req.params;
-    
-    // Prevent admin from deactivating themselves
-    if (req.user.id === id) {
+
+    // Prevent user from deactivating themselves
+    if (req.user.id === parseInt(id)) {
       return res.status(400).json({
         success: false,
         error: 'You cannot deactivate your own account'
       });
     }
-    
-    const userIndex = mockUsers.findIndex(u => u.id === id);
-    if (userIndex === -1) {
+
+    // Check if user exists
+    const [users] = await pool.execute(
+      'SELECT u.*, p.name as position_name FROM user u LEFT JOIN `position` p ON u.position_id = p.id WHERE u.id = ?',
+      [id]
+    );
+
+    if (users.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'User not found'
       });
     }
 
-    // Deactivate user
-    mockUsers[userIndex] = {
-      ...mockUsers[userIndex],
-      is_active: false,
-      updatedAt: new Date().toISOString()
-    };
+    const user = users[0];
 
-    const { password, ...userResponse } = mockUsers[userIndex];
+    // Prevent deactivation of Administrator users by non-administrators
+    if (user.position_name === 'Administrator' && req.user.positionName !== 'Administrator') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only administrators can deactivate other administrators'
+      });
+    }
+
+    // Deactivate user
+    await pool.execute('UPDATE user SET is_active = FALSE, updated_at = NOW() WHERE id = ?', [id]);
+
+    // Log the activity
+    await pool.execute(`
+      INSERT INTO activity_log (user_id, action, entity, entity_id, description)
+      VALUES (?, 'deactivate', 'user', ?, ?)
+    `, [req.user.id, id, `Deactivated user: ${user.first_name} ${user.last_name}`]);
 
     res.json({
       success: true,
       message: 'User deactivated successfully',
       data: {
-        user: userResponse
+        user: {
+          id: user.id,
+          first_name: user.first_name,
+          last_name: user.last_name,
+          email: user.email,
+          is_active: false
+        }
       }
     });
 
@@ -376,34 +512,55 @@ router.put('/:id/deactivate', auth, authorize('admin'), async (req, res) => {
 });
 
 // @route   PUT /api/users/:id/activate
-// @desc    Activate user (Admin only)
+// @desc    Activate user (requires users edit permission)
 // @access  Private
-router.put('/:id/activate', auth, authorize('admin'), async (req, res) => {
+router.put('/:id/activate', auth, requirePermission('users', 'edit'), async (req, res) => {
   try {
     const { id } = req.params;
-    
-    const userIndex = mockUsers.findIndex(u => u.id === id);
-    if (userIndex === -1) {
+
+    // Check if user exists
+    const [users] = await pool.execute(
+      'SELECT u.*, p.name as position_name FROM user u LEFT JOIN `position` p ON u.position_id = p.id WHERE u.id = ?',
+      [id]
+    );
+
+    if (users.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'User not found'
       });
     }
 
-    // Activate user
-    mockUsers[userIndex] = {
-      ...mockUsers[userIndex],
-      is_active: true,
-      updatedAt: new Date().toISOString()
-    };
+    const user = users[0];
 
-    const { password, ...userResponse } = mockUsers[userIndex];
+    // Prevent activation of Administrator users by non-administrators
+    if (user.position_name === 'Administrator' && req.user.positionName !== 'Administrator') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only administrators can activate other administrators'
+      });
+    }
+
+    // Activate user
+    await pool.execute('UPDATE user SET is_active = TRUE, updated_at = NOW() WHERE id = ?', [id]);
+
+    // Log the activity
+    await pool.execute(`
+      INSERT INTO activity_log (user_id, action, entity, entity_id, description)
+      VALUES (?, 'activate', 'user', ?, ?)
+    `, [req.user.id, id, `Activated user: ${user.first_name} ${user.last_name}`]);
 
     res.json({
       success: true,
       message: 'User activated successfully',
       data: {
-        user: userResponse
+        user: {
+          id: user.id,
+          first_name: user.first_name,
+          last_name: user.last_name,
+          email: user.email,
+          is_active: true
+        }
       }
     });
 
@@ -425,44 +582,45 @@ router.put('/:id/activate', auth, authorize('admin'), async (req, res) => {
 /*
   @route   GET /api/users/positions
   @desc    Get all positions with permissions
-  @access  Private - Requires user management permission
+  @access  Private - Requires user view permission
 */
-router.get('/admin/positions', auth, requirePermission('canManageUsers'), async (req, res) => {
+router.get('/admin/positions', auth, requirePermission('users', 'view'), async (req, res) => {
   try {
     const [positions] = await pool.execute(`
-      SELECT id, name, can_manage_projects, can_edit_project, can_add_project, can_delete_project,
-             can_manage_inventory, can_add_inventory, can_edit_inventory, can_delete_inventory,
-             can_manage_users, can_edit_user, can_add_user, can_delete_user,
-             created_at, updated_at
+      SELECT id, name, description, permissions, created_at, updated_at
       FROM \`position\`
       ORDER BY name
     `);
 
     // Filter out Administrator position from non-administrators
-    const filteredPositions = req.user.positionName === 'Administrator' 
-      ? positions 
+    const filteredPositions = req.user.positionName === 'Administrator'
+      ? positions
       : positions.filter(pos => pos.name !== 'Administrator');
 
-    const formattedPositions = filteredPositions.map(pos => ({
-      id: pos.id,
-      name: pos.name,
-      permissions: {
-        canManageProjects: Boolean(pos.can_manage_projects),
-        canEditProject: Boolean(pos.can_edit_project),
-        canAddProject: Boolean(pos.can_add_project),
-        canDeleteProject: Boolean(pos.can_delete_project),
-        canManageInventory: Boolean(pos.can_manage_inventory),
-        canAddInventory: Boolean(pos.can_add_inventory),
-        canEditInventory: Boolean(pos.can_edit_inventory),
-        canDeleteInventory: Boolean(pos.can_delete_inventory),
-        canManageUsers: Boolean(pos.can_manage_users),
-        canEditUser: Boolean(pos.can_edit_user),
-        canAddUser: Boolean(pos.can_add_user),
-        canDeleteUser: Boolean(pos.can_delete_user)
-      },
-      created_at: pos.created_at,
-      updated_at: pos.updated_at
-    }));
+    const formattedPositions = filteredPositions.map(pos => {
+      // Parse JSON permissions (handle both string and object)
+      let permissions = { projects: [], inventory: [], users: [] };
+      if (pos.permissions) {
+        if (typeof pos.permissions === 'string') {
+          try {
+            permissions = JSON.parse(pos.permissions);
+          } catch (e) {
+            console.error('Failed to parse position permissions JSON:', e);
+          }
+        } else {
+          permissions = pos.permissions;
+        }
+      }
+
+      return {
+        id: pos.id,
+        name: pos.name,
+        description: pos.description,
+        permissions,
+        created_at: pos.created_at,
+        updated_at: pos.updated_at
+      };
+    });
 
     res.json({
       success: true,
@@ -483,13 +641,14 @@ router.get('/admin/positions', auth, requirePermission('canManageUsers'), async 
 /*
   @route   POST /api/users/positions
   @desc    Create new position
-  @access  Private - Requires user management permission
+  @access  Private - Requires user add permission
 */
-router.post('/admin/positions', auth, requirePermission('canManageUsers'), async (req, res) => {
+router.post('/admin/positions', auth, requirePermission('users', 'add'), async (req, res) => {
   try {
     const {
       name,
-      permissions = {}
+      description = '',
+      permissions = { projects: [], inventory: [], users: [] }
     } = req.body;
 
     if (!name || name.trim().length === 0) {
@@ -508,27 +667,13 @@ router.post('/admin/positions', auth, requirePermission('canManageUsers'), async
       });
     }
 
+    // Convert permissions object to JSON string
+    const permissionsJson = JSON.stringify(permissions);
+
     const [result] = await pool.execute(`
-      INSERT INTO \`position\` (
-        name, can_manage_projects, can_edit_project, can_add_project, can_delete_project,
-        can_manage_inventory, can_add_inventory, can_edit_inventory, can_delete_inventory,
-        can_manage_users, can_edit_user, can_add_user, can_delete_user
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      name,
-      permissions.canManageProjects || false,
-      permissions.canEditProject || false,
-      permissions.canAddProject || false,
-      permissions.canDeleteProject || false,
-      permissions.canManageInventory || false,
-      permissions.canAddInventory || false,
-      permissions.canEditInventory || false,
-      permissions.canDeleteInventory || false,
-      permissions.canManageUsers || false,
-      permissions.canEditUser || false,
-      permissions.canAddUser || false,
-      permissions.canDeleteUser || false
-    ]);
+      INSERT INTO \`position\` (name, description, permissions)
+      VALUES (?, ?, ?)
+    `, [name, description, permissionsJson]);
 
     // Log the activity
     await pool.execute(`
@@ -543,6 +688,7 @@ router.post('/admin/positions', auth, requirePermission('canManageUsers'), async
         position: {
           id: result.insertId,
           name,
+          description,
           permissions
         }
       }
@@ -566,15 +712,15 @@ router.post('/admin/positions', auth, requirePermission('canManageUsers'), async
 /*
   @route   PUT /api/users/positions/:id
   @desc    Update position permissions (Admin cannot be modified)
-  @access  Private - Requires user management permission
+  @access  Private - Requires user edit permission
 */
-router.put('/admin/positions/:id', auth, requirePermission('canManageUsers'), async (req, res) => {
+router.put('/admin/positions/:id', auth, requirePermission('users', 'edit'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, permissions } = req.body;
+    const { name, description, permissions } = req.body;
 
     // Check if position exists
-    const [existingPos] = await pool.execute('SELECT name FROM `position` WHERE id = ?', [id]);
+    const [existingPos] = await pool.execute('SELECT name, description, permissions FROM `position` WHERE id = ?', [id]);
     if (existingPos.length === 0) {
       return res.status(404).json({
         success: false,
@@ -606,34 +752,15 @@ router.put('/admin/positions/:id', auth, requirePermission('canManageUsers'), as
       updateValues.push(name);
     }
 
+    if (description !== undefined) {
+      updateFields.push('description = ?');
+      updateValues.push(description);
+    }
+
     if (permissions) {
-      const permissionFields = [
-        'can_manage_projects', 'can_edit_project', 'can_add_project', 'can_delete_project',
-        'can_manage_inventory', 'can_add_inventory', 'can_edit_inventory', 'can_delete_inventory',
-        'can_manage_users', 'can_edit_user', 'can_add_user', 'can_delete_user'
-      ];
-
-      const permissionMapping = {
-        canManageProjects: 'can_manage_projects',
-        canEditProject: 'can_edit_project',
-        canAddProject: 'can_add_project',
-        canDeleteProject: 'can_delete_project',
-        canManageInventory: 'can_manage_inventory',
-        canAddInventory: 'can_add_inventory',
-        canEditInventory: 'can_edit_inventory',
-        canDeleteInventory: 'can_delete_inventory',
-        canManageUsers: 'can_manage_users',
-        canEditUser: 'can_edit_user',
-        canAddUser: 'can_add_user',
-        canDeleteUser: 'can_delete_user'
-      };
-
-      for (const [key, dbField] of Object.entries(permissionMapping)) {
-        if (permissions.hasOwnProperty(key)) {
-          updateFields.push(`${dbField} = ?`);
-          updateValues.push(permissions[key] || false);
-        }
-      }
+      // Store permissions as JSON
+      updateFields.push('permissions = ?');
+      updateValues.push(JSON.stringify(permissions));
     }
 
     if (updateFields.length === 0) {
@@ -674,9 +801,9 @@ router.put('/admin/positions/:id', auth, requirePermission('canManageUsers'), as
 /*
   @route   DELETE /api/users/positions/:id
   @desc    Delete position (Admin cannot be deleted)
-  @access  Private - Requires user management permission
+  @access  Private - Requires user delete permission
 */
-router.delete('/admin/positions/:id', auth, requirePermission('canManageUsers'), async (req, res) => {
+router.delete('/admin/positions/:id', auth, requirePermission('users', 'delete'), async (req, res) => {
   try {
     const { id } = req.params;
 

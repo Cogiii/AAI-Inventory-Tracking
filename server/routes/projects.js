@@ -385,7 +385,7 @@ router.get('/:id', auth, async (req, res) => {
  * @desc    Create new project
  * @access  Private (requires canAddProject permission)
  */
-router.post('/', auth, requirePermission('canAddProject'), async (req, res) => {
+router.post('/', auth, requirePermission('projects', 'add'), async (req, res) => {
   try {
     const { jo_number, name, description, status = 'upcoming' } = req.body;
     const created_by = req.user.id;
@@ -463,7 +463,7 @@ router.post('/', auth, requirePermission('canAddProject'), async (req, res) => {
  * @desc    Update project
  * @access  Private (requires canEditProject permission)
  */
-router.put('/:id', auth, requirePermission('canEditProject'), async (req, res) => {
+router.put('/:id', auth, requirePermission('projects', 'edit'), async (req, res) => {
   try {
     const { id } = req.params;
     const { jo_number, name, description, status } = req.body;
@@ -572,7 +572,7 @@ router.put('/:id', auth, requirePermission('canEditProject'), async (req, res) =
  * @desc    Delete project (soft delete by changing status)
  * @access  Private (requires canDeleteProject permission)
  */
-router.delete('/:id', auth, requirePermission('canDeleteProject'), async (req, res) => {
+router.delete('/:id', auth, requirePermission('projects', 'delete'), async (req, res) => {
   try {
     const { id } = req.params;
 

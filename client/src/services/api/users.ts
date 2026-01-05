@@ -1,4 +1,5 @@
 import { api } from './index';
+import type { Permissions, PermissionAction } from '@/types';
 
 export interface User {
   id: number;
@@ -11,39 +12,14 @@ export interface User {
   is_active: boolean;
   created_at: string;
   updated_at: string;
-  permissions: {
-    canManageProjects: boolean;
-    canEditProject: boolean;
-    canAddProject: boolean;
-    canDeleteProject: boolean;
-    canManageInventory: boolean;
-    canAddInventory: boolean;
-    canEditInventory: boolean;
-    canDeleteInventory: boolean;
-    canManageUsers: boolean;
-    canEditUser: boolean;
-    canAddUser: boolean;
-    canDeleteUser: boolean;
-  };
+  permissions: Permissions;
 }
 
 export interface Position {
   id: number;
   name: string;
-  permissions: {
-    canManageProjects: boolean;
-    canEditProject: boolean;
-    canAddProject: boolean;
-    canDeleteProject: boolean;
-    canManageInventory: boolean;
-    canAddInventory: boolean;
-    canEditInventory: boolean;
-    canDeleteInventory: boolean;
-    canManageUsers: boolean;
-    canEditUser: boolean;
-    canAddUser: boolean;
-    canDeleteUser: boolean;
-  };
+  description?: string;
+  permissions: Permissions;
   created_at: string;
   updated_at: string;
 }
@@ -99,38 +75,14 @@ export interface UpdateUserData {
 
 export interface CreatePositionData {
   name: string;
-  permissions: {
-    canManageProjects?: boolean;
-    canEditProject?: boolean;
-    canAddProject?: boolean;
-    canDeleteProject?: boolean;
-    canManageInventory?: boolean;
-    canAddInventory?: boolean;
-    canEditInventory?: boolean;
-    canDeleteInventory?: boolean;
-    canManageUsers?: boolean;
-    canEditUser?: boolean;
-    canAddUser?: boolean;
-    canDeleteUser?: boolean;
-  };
+  description?: string;
+  permissions: Permissions;
 }
 
 export interface UpdatePositionData {
   name?: string;
-  permissions?: {
-    canManageProjects?: boolean;
-    canEditProject?: boolean;
-    canAddProject?: boolean;
-    canDeleteProject?: boolean;
-    canManageInventory?: boolean;
-    canAddInventory?: boolean;
-    canEditInventory?: boolean;
-    canDeleteInventory?: boolean;
-    canManageUsers?: boolean;
-    canEditUser?: boolean;
-    canAddUser?: boolean;
-    canDeleteUser?: boolean;
-  };
+  description?: string;
+  permissions?: Permissions;
 }
 
 // User Management API

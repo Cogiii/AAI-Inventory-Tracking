@@ -176,10 +176,10 @@ router.get('/me', auth, async (req, res) => {
 // @route   PUT /api/auth/me
 // @desc    Update current user profile
 // @access  Private
-router.put('/me', auth, validate(schemas.updateUser), async (req, res) => {
+router.put('/me', auth, async (req, res) => {
   try {
-    const { name, email } = req.body;
-    
+    const { first_name, last_name, email, username } = req.body;
+
     const user = await UserService.findById(req.user.id);
     if (!user) {
       return res.status(404).json({
@@ -190,8 +190,8 @@ router.put('/me', auth, validate(schemas.updateUser), async (req, res) => {
 
     // Check if email is being changed and if it already exists
     if (email && email !== user.email) {
-      const existingUser = await UserService.findByEmail(email);
-      if (existingUser) {
+      const emailExists = await UserService.emailExists(email, req.user.id);
+      if (emailExists) {
         return res.status(400).json({
           success: false,
           error: 'Email already in use'
@@ -199,15 +199,29 @@ router.put('/me', auth, validate(schemas.updateUser), async (req, res) => {
       }
     }
 
-    // Split name into first and last name if provided
-    const updateData = {};
-    if (name) {
-      const nameParts = name.split(' ');
-      updateData.firstName = nameParts[0];
-      updateData.lastName = nameParts.slice(1).join(' ') || nameParts[0];
+    // Check if username is being changed and if it already exists
+    if (username && username !== user.username) {
+      const usernameExists = await UserService.usernameExists(username, req.user.id);
+      if (usernameExists) {
+        return res.status(400).json({
+          success: false,
+          error: 'Username already in use'
+        });
+      }
     }
-    if (email) {
-      updateData.email = email;
+
+    // Build update data
+    const updateData = {};
+    if (first_name) updateData.firstName = first_name;
+    if (last_name) updateData.lastName = last_name;
+    if (email) updateData.email = email;
+    if (username) updateData.username = username;
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No fields to update'
+      });
     }
 
     // Update user
@@ -229,6 +243,63 @@ router.put('/me', auth, validate(schemas.updateUser), async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Server error updating profile'
+    });
+  }
+});
+
+// @route   POST /api/auth/change-password
+// @desc    Change user password
+// @access  Private
+router.post('/change-password', auth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    // Validate input
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'Current password and new password are required'
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        error: 'New password must be at least 8 characters long'
+      });
+    }
+
+    // Get user with password
+    const user = await UserService.findByUsername(req.user.username);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // Verify current password
+    const isMatch = await comparePassword(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({
+        success: false,
+        error: 'Current password is incorrect'
+      });
+    }
+
+    // Update password
+    await UserService.updatePassword(req.user.id, newPassword);
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully'
+    });
+
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error changing password'
     });
   }
 });

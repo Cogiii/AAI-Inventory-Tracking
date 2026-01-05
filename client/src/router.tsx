@@ -17,6 +17,7 @@ import {
   InventoryPage,
   ItemDetails,
   UsersPage,
+  SettingsPage,
 } from './pages';
 
 export const router = createBrowserRouter([
@@ -121,11 +122,23 @@ export const router = createBrowserRouter([
     path: '/users',
     element: (
       <ProtectedRoute>
-        <PermissionGuard requiredPermission="canManageUsers" showAccessDenied={true}>
+        <PermissionGuard module="users" action="view" showAccessDenied={true}>
           <Layout showSidebar={true}>
             <UsersPage />
           </Layout>
         </PermissionGuard>
+      </ProtectedRoute>
+    ),
+    loader: protectedRouteLoader,
+    errorElement: <RouterErrorBoundary />,
+  },
+  {
+    path: '/settings',
+    element: (
+      <ProtectedRoute>
+        <Layout showSidebar={true}>
+          <SettingsPage />
+        </Layout>
       </ProtectedRoute>
     ),
     loader: protectedRouteLoader,

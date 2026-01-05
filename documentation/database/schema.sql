@@ -27,22 +27,13 @@ CREATE TABLE brand (
 CREATE TABLE `position` (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
 
-    -- Permissions
-    can_manage_projects BOOLEAN DEFAULT FALSE, -- Access to everything
-    can_edit_project BOOLEAN DEFAULT FALSE,
-    can_add_project BOOLEAN DEFAULT FALSE,
-    can_delete_project BOOLEAN DEFAULT FALSE,
-    
-    can_manage_inventory BOOLEAN DEFAULT FALSE,-- Access to everything
-    can_add_inventory BOOLEAN DEFAULT FALSE,
-    can_edit_inventory BOOLEAN DEFAULT FALSE,
-    can_delete_inventory BOOLEAN DEFAULT FALSE,
-    
-    can_manage_users BOOLEAN DEFAULT FALSE, -- Access to everything
-    can_edit_user BOOLEAN DEFAULT FALSE,
-    can_add_user BOOLEAN DEFAULT FALSE,
-    can_delete_user BOOLEAN DEFAULT FALSE,
+    -- Permissions stored as JSON
+    -- Structure: {"projects": ["view","add","edit","delete"], "inventory": [...], "users": [...]}
+    -- Available modules: projects, inventory, users
+    -- Available actions: view, add, edit, delete
+    permissions JSON,
 
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NULL ON UPDATE NOW()
