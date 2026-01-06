@@ -96,7 +96,7 @@ const Projects = () => {
                   </div>
                   
                   <Link
-                    to={`/projects/${project.id}`}
+                    to={`/project/${project.jo_number}`}
                     className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all duration-200"
                   >
                     <Eye className="h-3.5 w-3.5" />

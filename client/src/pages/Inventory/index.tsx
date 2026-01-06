@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { useInventoryStats } from '@/hooks/useInventory'
 import Loader from '@/components/ui/Loader'
+import { UpdatesBanner } from '@/components/ui/UpdatesBanner'
 
 import InventoryTable from './components/InventoryTable'
 import InventoryFilters from './components/InventoryFilters'
@@ -53,6 +54,9 @@ const Inventory = () => {
 
   return (
     <div className="space-y-6 p-7">
+      {/* Real-time updates banner */}
+      <UpdatesBanner entity="inventory" message="New inventory updates available" />
+
       {/* Overview */}
       <div className="bg-gray space-y-6 p-7 rounded-lg">
         <h1 className="text-2xl font-semibold text-gray-custom">Inventory Management</h1>

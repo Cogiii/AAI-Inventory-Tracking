@@ -14,3 +14,7 @@ export { default as InventoryPage } from './Inventory';
 export { default as ItemDetails } from './ItemDetails';
 export { default as UsersPage } from './Users';
 export { default as SettingsPage } from './Settings';
+
+// Logs pages
+export { default as ActivityLogsPage } from './ActivityLogs';
+export { default as InventoryLogsPage } from './InventoryLogs';

@@ -3,6 +3,13 @@ const router = express.Router();
 const db = require('../config/database');
 const { auth, requirePermission } = require('../middleware/auth');
 
+// Real-time event emitters
+const {
+  emitProjectCreated,
+  emitProjectUpdated,
+  emitProjectDeleted,
+} = require('../socket/events');
+
 /**
  * @route   GET /api/projects
  * @desc    Get all projects with filters and pagination
@@ -443,6 +450,9 @@ router.post('/', auth, requirePermission('projects', 'add'), async (req, res) =>
       VALUES (?, 'created', 'project', ?, ?, NOW())
     `, [req.user?.id, projectId, `Created project "${name}" (${jo_number})`]);
 
+    // Emit real-time event for new project
+    emitProjectCreated(projectId, newProject[0], req.user);
+
     res.status(201).json({
       success: true,
       message: 'Project created successfully',
@@ -466,15 +476,23 @@ router.post('/', auth, requirePermission('projects', 'add'), async (req, res) =>
 router.put('/:id', auth, requirePermission('projects', 'edit'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { jo_number, name, description, status } = req.body;
+    const { jo_number, name, description, status, cancellation_reason } = req.body;
 
     // Check if project exists
-    const existingProject = await db.query('SELECT id FROM project WHERE id = ?', [id]);
-    
+    const existingProject = await db.query('SELECT id, status FROM project WHERE id = ?', [id]);
+
     if (existingProject.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Project not found'
+      });
+    }
+
+    // Validate: if status is being set to 'cancelled', cancellation_reason is required
+    if (status === 'cancelled' && (!cancellation_reason || cancellation_reason.trim() === '')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cancellation reason is required when cancelling a project'
       });
     }
 
@@ -512,6 +530,16 @@ router.put('/:id', auth, requirePermission('projects', 'edit'), async (req, res)
     if (status) {
       updateFields.push('status = ?');
       updateValues.push(status);
+
+      // Handle cancellation_reason based on status
+      if (status === 'cancelled') {
+        updateFields.push('cancellation_reason = ?');
+        updateValues.push(cancellation_reason.trim());
+      } else {
+        // Clear cancellation_reason when reactivating from cancelled
+        updateFields.push('cancellation_reason = ?');
+        updateValues.push(null);
+      }
     }
 
     if (updateFields.length === 0) {
@@ -529,12 +557,13 @@ router.put('/:id', auth, requirePermission('projects', 'edit'), async (req, res)
 
     // Get updated project details
     const updatedProjectQuery = `
-      SELECT 
+      SELECT
         p.id as project_id,
         p.jo_number,
         p.name as project_name,
         p.description,
         p.status,
+        p.cancellation_reason,
         p.created_at,
         p.updated_at,
         CONCAT(u.first_name, ' ', u.last_name) as created_by_name
@@ -547,10 +576,20 @@ router.put('/:id', auth, requirePermission('projects', 'edit'), async (req, res)
 
     // Log activity for project update
     const projectName = updatedProject[0]?.project_name || 'Unknown';
+    let logDescription = `Updated project "${projectName}"`;
+    if (status === 'cancelled') {
+      logDescription = `Cancelled project "${projectName}". Reason: ${cancellation_reason.trim()}`;
+    } else if (existingProject[0].status === 'cancelled' && status && status !== 'cancelled') {
+      logDescription = `Reactivated project "${projectName}" (status changed to ${status})`;
+    }
+
     await db.query(`
       INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
       VALUES (?, 'updated', 'project', ?, ?, NOW())
-    `, [req.user?.id, id, `Updated project "${projectName}"`]);
+    `, [req.user?.id, id, logDescription]);
+
+    // Emit real-time event for updated project
+    emitProjectUpdated(id, updatedProject[0], req.user, updatedProject[0].jo_number);
 
     res.json({
       success: true,
@@ -600,6 +639,9 @@ router.delete('/:id', auth, requirePermission('projects', 'delete'), async (req,
       INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
       VALUES (?, 'deleted', 'project', ?, ?, NOW())
     `, [req.user?.id, id, `Cancelled project "${projectName}" (${joNumber})`]);
+
+    // Emit real-time event for deleted project
+    emitProjectDeleted(id, req.user, joNumber);
 
     res.json({
       success: true,

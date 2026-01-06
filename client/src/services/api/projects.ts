@@ -7,6 +7,7 @@ export interface Project {
   project_name: string;
   description: string;
   status: 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
+  cancellation_reason?: string;
   created_at: string;
   updated_at: string;
   created_by_name: string;
@@ -92,6 +93,7 @@ export interface UpdateProjectRequest {
   name?: string;
   description?: string;
   status?: 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
+  cancellation_reason?: string;
 }
 
 // Projects API Service

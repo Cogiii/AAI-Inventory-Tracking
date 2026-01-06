@@ -174,6 +174,161 @@ router.get('/activity-logs', auth, async (req, res) => {
 });
 
 /**
+ * @route   GET /api/dashboard/activity-logs/all
+ * @desc    Get all activity logs with pagination
+ * @access  Private
+ */
+router.get('/activity-logs/all', auth, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+    const search = req.query.search || '';
+
+    // Get total count
+    let countQuery = `SELECT COUNT(*) as total FROM activity_log al LEFT JOIN user u ON al.user_id = u.id`;
+    let countParams = [];
+
+    if (search) {
+      countQuery += ` WHERE al.description LIKE ? OR al.action LIKE ? OR al.entity LIKE ? OR CONCAT(u.first_name, ' ', u.last_name) LIKE ?`;
+      const searchPattern = `%${search}%`;
+      countParams = [searchPattern, searchPattern, searchPattern, searchPattern];
+    }
+
+    const countResult = await db.query(countQuery, countParams);
+    const totalItems = countResult[0].total;
+    const totalPages = Math.ceil(totalItems / limit);
+
+    // Get paginated logs
+    let logsQuery = `
+      SELECT
+        al.id,
+        al.action,
+        al.entity,
+        al.entity_id,
+        al.description,
+        al.created_at,
+        u.first_name as user_first_name,
+        u.last_name as user_last_name
+      FROM activity_log al
+      LEFT JOIN user u ON al.user_id = u.id
+    `;
+    let logsParams = [];
+
+    if (search) {
+      logsQuery += ` WHERE al.description LIKE ? OR al.action LIKE ? OR al.entity LIKE ? OR CONCAT(u.first_name, ' ', u.last_name) LIKE ?`;
+      const searchPattern = `%${search}%`;
+      logsParams = [searchPattern, searchPattern, searchPattern, searchPattern];
+    }
+
+    logsQuery += ` ORDER BY al.created_at DESC LIMIT ? OFFSET ?`;
+    logsParams.push(limit, offset);
+
+    const logs = await db.query(logsQuery, logsParams);
+
+    res.json({
+      data: logs,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalItems,
+        itemsPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching all activity logs:', error);
+    res.status(500).json({ error: 'Failed to fetch activity logs' });
+  }
+});
+
+/**
+ * @route   GET /api/dashboard/inventory-logs/all
+ * @desc    Get all inventory logs with pagination
+ * @access  Private
+ */
+router.get('/inventory-logs/all', auth, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+    const search = req.query.search || '';
+    const logType = req.query.type || '';
+
+    // Build WHERE clauses
+    let whereConditions = [];
+    let params = [];
+
+    if (search) {
+      whereConditions.push(`(i.name LIKE ? OR il.reference_no LIKE ? OR il.remarks LIKE ?)`);
+      const searchPattern = `%${search}%`;
+      params.push(searchPattern, searchPattern, searchPattern);
+    }
+
+    if (logType && ['in', 'out', 'transfer'].includes(logType)) {
+      whereConditions.push(`il.log_type = ?`);
+      params.push(logType);
+    }
+
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+    // Get total count
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM inventory_log il
+      JOIN item i ON il.item_id = i.id
+      ${whereClause}
+    `;
+    const countResult = await db.query(countQuery, params);
+    const totalItems = countResult[0].total;
+    const totalPages = Math.ceil(totalItems / limit);
+
+    // Get paginated logs
+    const logsQuery = `
+      SELECT
+        il.id,
+        il.log_type,
+        il.reference_no,
+        il.quantity,
+        il.remarks,
+        il.created_at,
+        i.name as item_name,
+        i.type as item_type,
+        from_loc.name as from_location_name,
+        to_loc.name as to_location_name,
+        u.first_name as handler_first_name,
+        u.last_name as handler_last_name
+      FROM inventory_log il
+      JOIN item i ON il.item_id = i.id
+      LEFT JOIN location from_loc ON il.from_location_id = from_loc.id
+      LEFT JOIN location to_loc ON il.to_location_id = to_loc.id
+      LEFT JOIN user u ON il.handled_by = u.id
+      ${whereClause}
+      ORDER BY il.created_at DESC
+      LIMIT ? OFFSET ?
+    `;
+
+    const logs = await db.query(logsQuery, [...params, limit, offset]);
+
+    res.json({
+      data: logs,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalItems,
+        itemsPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching all inventory logs:', error);
+    res.status(500).json({ error: 'Failed to fetch inventory logs' });
+  }
+});
+
+/**
  * @route   GET /api/dashboard/low-stock-items
  * @desc    Get items with low stock levels
  * @access  Private

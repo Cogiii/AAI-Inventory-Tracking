@@ -46,7 +46,8 @@ const AddInventoryModal: FC<AddInventoryModalProps> = ({ isOpen, onClose }) => {
       delivered_quantity: '',
       damaged_quantity: '',
       lost_quantity: '',
-      available_quantity: ''
+      available_quantity: '',
+      reference_number: ''
       // Note: status is NOT included - it will be auto-set by database trigger
     }
   })
@@ -227,6 +228,24 @@ const AddInventoryModal: FC<AddInventoryModalProps> = ({ isOpen, onClose }) => {
                 <p className="text-red-500 text-sm mt-1">{errors.warehouse_location_id.message}</p>
               )}
             </div>
+
+            {/* Reference Number - Only show when quantity > 0 */}
+            {Number(watchedValues.delivered_quantity) > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Reference Number
+                </label>
+                <input
+                  type="text"
+                  {...register('reference_number')}
+                  placeholder="PO number, delivery receipt, etc."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                {errors.reference_number && (
+                  <p className="text-red-500 text-sm mt-1">{errors.reference_number.message}</p>
+                )}
+              </div>
+            )}
 
             {/* Status Info - Read Only */}
             <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">

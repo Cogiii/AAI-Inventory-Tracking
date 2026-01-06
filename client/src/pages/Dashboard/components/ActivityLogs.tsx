@@ -1,14 +1,20 @@
+import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { 
+import {
   Activity,
   Clock,
   CheckCircle,
-  Edit3
+  Edit3,
+  ArrowRight
 } from 'lucide-react'
 import { useActivityLogs } from '@/hooks/useDashboard'
-  
+
 const ActivityLogs = () => {
   const { data: logs, isLoading, error } = useActivityLogs();
+
+  // Limit to 10 items for dashboard
+  const displayLogs = logs?.slice(0, 10) || [];
+
   const getActivityIcon = (type: string) => {
     switch (type) {
       case 'approval':
@@ -22,8 +28,13 @@ const ActivityLogs = () => {
     }
   }
 
-  const formatRelativeTime = (_dateString: string) => {
-    return 'Fri Sep 12 8:34 PM'
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
   }
 
   return (
@@ -34,9 +45,13 @@ const ActivityLogs = () => {
             <Activity className="h-5 w-5" />
             Activity Logs
           </CardTitle>
-          <button className="text-xs font-medium text-blue-600 hover:text-blue-800 px-2 py-1 rounded-lg hover:bg-blue-50 transition-all duration-200">
+          <Link
+            to="/activity-logs"
+            className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800 px-2 py-1 rounded-lg hover:bg-blue-50 transition-all duration-200"
+          >
             VIEW ALL
-          </button>
+            <ArrowRight className="h-3 w-3" />
+          </Link>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -59,8 +74,8 @@ const ActivityLogs = () => {
             <Activity className="h-12 w-12 mx-auto mb-3 text-red-300" />
             <p>Error loading activity logs</p>
           </div>
-        ) : logs && logs.length > 0 ? (
-          logs.map((log) => {
+        ) : displayLogs.length > 0 ? (
+          displayLogs.map((log) => {
             const userName = log.user_first_name && log.user_last_name 
               ? `${log.user_first_name} ${log.user_last_name}`
               : 'Unknown User';
@@ -90,7 +105,7 @@ const ActivityLogs = () => {
                   
                   <div className="flex items-center gap-1 mt-2 text-xs text-gray-500">
                     <Clock className="h-3 w-3" />
-                    {formatRelativeTime(log.created_at)}
+                    {formatDateTime(log.created_at)}
                   </div>
                 </div>
               </div>

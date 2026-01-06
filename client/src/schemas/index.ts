@@ -130,6 +130,10 @@ export const inventoryItemFormSchema = z.object({
     .optional()
     .transform(val => val === '' ? null : Number(val))
     .refine(val => val === null || !isNaN(val as number), 'Invalid warehouse location'),
+  reference_number: z
+    .string()
+    .max(100, 'Reference number must not exceed 100 characters')
+    .optional(),
   status: z
     .enum(['in stock', 'out of stock', 'low stock', 'inactive'])
     .optional()

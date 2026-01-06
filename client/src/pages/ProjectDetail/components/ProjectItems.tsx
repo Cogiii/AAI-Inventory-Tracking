@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import type { FC } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Package, Box, AlertTriangle, CheckCircle, XCircle, Plus, Edit, Trash2, Calendar, Loader2, Lock } from 'lucide-react'
+import { Package, Plus, Edit, Trash2, Loader2, AlertTriangle, Lock } from 'lucide-react'
 import AddItemForm from '../modals/AddItemForm'
 import EditItemForm from '../modals/EditItemForm'
 import { ConfirmationModal } from '@/components/ui'
@@ -13,7 +12,6 @@ interface ProjectItemsProps {
 }
 
 const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
-  // All hooks must be called before any conditional returns
   const { data: projectData, isLoading: projectLoading, error: projectError } = useProjectDetail(joNumber)
   const deleteProjectItemMutation = useDeleteProjectItem()
   const { openAddDayModal } = useProjectDetailModalStore()
@@ -28,26 +26,17 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
     dayId: number
   }>({ isOpen: false, item: null, dayId: 0 })
 
-  // Handler functions
   const handleDeleteItem = async (projectItemId: number) => {
     if (!joNumber) return
-    
     try {
-      await deleteProjectItemMutation.mutateAsync({
-        joNumber,
-        id: projectItemId
-      })
+      await deleteProjectItemMutation.mutateAsync({ joNumber, id: projectItemId })
     } catch (error) {
       console.error('Error deleting project item:', error)
     }
   }
 
   const handleDeleteClick = (item: any, dayId: number) => {
-    setDeleteConfirmation({
-      isOpen: true,
-      item,
-      dayId
-    })
+    setDeleteConfirmation({ isOpen: true, item, dayId })
   }
 
   const handleConfirmDelete = () => {
@@ -57,283 +46,160 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
     }
   }
 
-  // Early returns after all hooks
   if (!joNumber) return null
 
   if (projectLoading) {
     return (
-      <Card className="bg-gray">
-        <CardContent className="p-6 text-center">
-          <Loader2 className="h-8 w-8 mx-auto mb-4 text-blue-500 animate-spin" />
-          <p className="text-gray-600">Loading project items...</p>
-        </CardContent>
-      </Card>
+      <div className="flex items-center gap-3 p-4">
+        <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+        <p className="text-sm text-gray-600">Loading items...</p>
+      </div>
     )
   }
 
   if (projectError || !projectData) {
     return (
-      <Card className="bg-gray">
-        <CardContent className="p-6 text-center">
-          <AlertTriangle className="h-8 w-8 mx-auto mb-4 text-red-500" />
-          <p className="text-gray-600">Error loading project items</p>
-        </CardContent>
-      </Card>
+      <div className="flex items-center gap-3 p-4 bg-red-50 rounded-lg">
+        <AlertTriangle className="h-5 w-5 text-red-500" />
+        <p className="text-sm text-red-700">Error loading items</p>
+      </div>
     )
   }
 
   const projectDays = projectData.project_days || []
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return 'bg-blue-100 text-blue-800 border-blue-200'
-      case 'accepted':
-        return 'bg-green-100 text-green-800 border-green-200'
-      case 'returned':
-        return 'bg-gray-100 text-gray-800 border-gray-200'
-      case 'rejected':
-        return 'bg-red-100 text-red-800 border-red-200'
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200'
-    }
-  }
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'pending': return Package
-      case 'accepted': return CheckCircle
-      case 'returned': return Box
-      case 'rejected': return XCircle
-      default: return Package
-    }
-  }
-
-  const getTypeColor = (type: string) => {
-    return type === 'product' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
-  }
-
-  const calculateInUse = (item: any) => {
-    return item.allocated_quantity - item.damaged_quantity - item.lost_quantity - item.returned_quantity
-  }
-
-  // Check if an item's day is completed (item cannot be edited)
   const isItemDayCompleted = (item: any) => {
     const day = projectDays.find(d => d.id === item.project_day_id)
     return day?.day_status === 'completed'
   }
 
-  // Check if there are any non-completed days for adding items
-  const hasEditableDays = projectDays.some(day => day.day_status !== 'completed')
-
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric'
-    })
+    return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 
-  // Get items for display based on selected day
   const getDisplayItems = () => {
     if (selectedDay === 'all') {
-      // Combine all items from all days
       const allItems: any[] = []
-      projectDays.forEach(day => {
-        allItems.push(...day.items)
-      })
+      projectDays.forEach(day => allItems.push(...day.items))
       return allItems
     }
-    // Find the specific day and return its items
     const targetDay = projectDays.find(day => day.id === selectedDay)
     return targetDay ? targetDay.items : []
   }
 
   const displayItems = getDisplayItems()
+  const totalItems = displayItems.reduce((sum, item) => sum + item.allocated_quantity, 0)
 
   return (
-    <Card className='bg-gray'>
-      <CardHeader className="pb-4">
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2 text-gray-custom">
-            <Package className="h-5 w-5" />
-            Project Items & Stocks
-          </CardTitle>
-          <button
-            onClick={() => setShowAddForm(true)}
-            disabled={!hasEditableDays}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-200 text-sm ${
-              hasEditableDays
-                ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg hover:scale-105'
-                : 'bg-gray-400 text-gray-200 cursor-not-allowed'
-            }`}
-            title={!hasEditableDays ? 'All project days are completed' : 'Add item to project'}
-          >
-            <Plus className="h-4 w-4" />
-            Add Item
-          </button>
+    <div className="bg-white rounded-lg border border-gray-200">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-gray-100">
+        <div className="flex items-center gap-2">
+          <Package className="h-5 w-5 text-gray-600" />
+          <h2 className="font-semibold text-gray-900">Items</h2>
+          <span className="text-sm text-gray-500">({totalItems})</span>
         </div>
-        
-        {/* Day Filter */}
-        <div className="flex flex-wrap gap-2 mt-4">
+        <button
+          onClick={() => setShowAddForm(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          Add
+        </button>
+      </div>
+
+      {/* Day Filter - only show if there are days */}
+      {projectDays.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 px-4 py-2 border-b border-gray-100 bg-gray-50">
           <button
             onClick={() => setSelectedDay('all')}
-            className={`px-3 py-1 text-xs rounded-full transition-all duration-200 ${
-              selectedDay === 'all'
-                ? 'bg-blue-600 text-white shadow-lg'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:shadow-sm hover:scale-105'
+            className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
+              selectedDay === 'all' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100 border'
             }`}
           >
-            All Days
+            All
           </button>
-          {projectDays.map(day => {
+          {projectDays.map((day, index) => {
             const isCompleted = day.day_status === 'completed'
             return (
               <button
                 key={day.id}
                 onClick={() => setSelectedDay(day.id)}
-                className={`px-3 py-1 text-xs rounded-full transition-all duration-200 flex items-center gap-1 ${
+                className={`px-2.5 py-1 text-xs rounded-full transition-colors flex items-center gap-1 ${
                   selectedDay === day.id
-                    ? isCompleted
-                      ? 'bg-green-600 text-white shadow-lg'
-                      : 'bg-blue-600 text-white shadow-lg'
-                    : isCompleted
-                      ? 'bg-green-100 text-green-700 hover:bg-green-200 hover:shadow-sm hover:scale-105'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:shadow-sm hover:scale-105'
+                    ? isCompleted ? 'bg-green-600 text-white' : 'bg-blue-600 text-white'
+                    : isCompleted ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-white text-gray-600 hover:bg-gray-100 border'
                 }`}
               >
-                {isCompleted ? (
-                  <Lock className="h-3 w-3" />
-                ) : (
-                  <Calendar className="h-3 w-3" />
-                )}
+                {isCompleted && <Lock className="h-3 w-3" />}
                 {formatDate(day.project_date)}
               </button>
             )
           })}
         </div>
-      </CardHeader>
-      
-      <CardContent className="space-y-3 max-h-[600px] overflow-y-auto">
+      )}
+
+      {/* Content */}
+      <div className="p-4 max-h-[400px] overflow-y-auto">
         {displayItems.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <Package className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-            <p>No items allocated {selectedDay === 'all' ? 'to this project' : 'for this day'}</p>
+          <div className="text-center py-8 text-gray-400">
+            <Package className="h-10 w-10 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">No items</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {displayItems.map((item) => {
-              const StatusIcon = getStatusIcon(item.status)
-              const inUseQuantity = calculateInUse(item)
               const isDayCompleted = isItemDayCompleted(item)
+              const hasIssues = item.damaged_quantity > 0 || item.lost_quantity > 0
 
               return (
-                <Card key={`${item.id}-${item.project_day_id}`} className={`bg-white hover:shadow-sm transition-shadow ${isDayCompleted ? 'border-green-200' : ''}`}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <StatusIcon className="h-4 w-4 text-blue-600" />
-                          <h3 className="font-medium text-sm text-gray-900">
-                            {item.item_name}
-                          </h3>
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getTypeColor(item.item_type)}`}>
-                            {item.item_type}
-                          </span>
-                          {selectedDay === 'all' && (
-                            <span className={`px-2 py-1 text-xs rounded-full flex items-center gap-1 ${
-                              isDayCompleted
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-gray-100 text-gray-600'
-                            }`}>
-                              {isDayCompleted && <Lock className="h-3 w-3" />}
-                              Day {projectDays.findIndex(d => d.id === item.project_day_id) + 1}
-                            </span>
-                          )}
-                          {isDayCompleted && selectedDay !== 'all' && (
-                            <span className="flex items-center gap-1 text-xs text-green-600">
-                              <Lock className="h-3 w-3" />
-                              Locked
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="text-xs text-gray-600 mb-3">
-                          <span className="font-medium">Brand:</span> {item.brand_name} |
-                          <span className="ml-1 font-medium">Location:</span> {item.warehouse_location}
-                        </div>
-
-                        {/* Quantity Grid */}
-                        <div className="grid grid-cols-2 gap-3 text-xs">
-                          <div className="bg-blue-50 p-2 rounded">
-                            <span className="font-medium text-blue-800">Allocated:</span>
-                            <span className="ml-1 font-bold">{item.allocated_quantity}</span>
-                          </div>
-                          <div className="bg-green-50 p-2 rounded">
-                            <span className="font-medium text-green-800">Returned:</span>
-                            <span className="ml-1 font-bold">{item.returned_quantity}</span>
-                          </div>
-                          <div className="bg-orange-50 p-2 rounded">
-                            <span className="font-medium text-orange-800">Damaged:</span>
-                            <span className="ml-1 font-bold">{item.damaged_quantity}</span>
-                          </div>
-                          <div className="bg-red-50 p-2 rounded">
-                            <span className="font-medium text-red-800">Lost:</span>
-                            <span className="ml-1 font-bold">{item.lost_quantity}</span>
-                          </div>
-                        </div>
-
-                        {/* Issues Details */}
-                        {(item.damaged_quantity > 0 || item.lost_quantity > 0) && (
-                          <div className="mt-3 flex items-center gap-4 text-xs bg-red-50 p-2 rounded">
-                            <AlertTriangle className="h-3 w-3 text-red-600" />
-                            <span className="text-red-800">
-                              {item.damaged_quantity > 0 && `${item.damaged_quantity} damaged`}
-                              {item.damaged_quantity > 0 && item.lost_quantity > 0 && ', '}
-                              {item.lost_quantity > 0 && `${item.lost_quantity} lost`}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex flex-col items-end gap-2">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(item.status)}`}>
-                          {item.status.replace('_', ' ')}
-                        </span>
-                        {/* Only show action buttons for non-completed days */}
-                        {!isDayCompleted && (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => setEditingItem(item)}
-                              disabled={deleteProjectItemMutation.isPending}
-                              className="p-2 text-blue-600 hover:bg-blue-50 hover:shadow-lg rounded-lg transition-all duration-200 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Edit item"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteClick(item, item.project_day_id)}
-                              disabled={deleteProjectItemMutation.isPending}
-                              className="p-2 text-red-600 hover:bg-red-50 hover:shadow-lg rounded-lg transition-all duration-200 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Delete item"
-                            >
-                              {deleteProjectItemMutation.isPending && deleteConfirmation.item?.id === item.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                <div
+                  key={`${item.id}-${item.project_day_id}`}
+                  className={`flex items-center justify-between p-3 rounded-lg border ${
+                    isDayCompleted ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-sm text-gray-900 truncate">{item.item_name}</p>
+                      {hasIssues && <AlertTriangle className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />}
+                      {isDayCompleted && <Lock className="h-3 w-3 text-gray-400 flex-shrink-0" />}
                     </div>
-                  </CardContent>
-                </Card>
+                    <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
+                      <span>{item.brand_name}</span>
+                      <span className="font-medium text-blue-600">{item.allocated_quantity} units</span>
+                      {item.returned_quantity > 0 && (
+                        <span className="text-green-600">{item.returned_quantity} returned</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {!isDayCompleted && (
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => setEditingItem(item)}
+                        className="p-1.5 text-blue-600 hover:bg-blue-100 rounded transition-colors"
+                        title="Edit"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClick(item, item.project_day_id)}
+                        disabled={deleteProjectItemMutation.isPending}
+                        className="p-1.5 text-red-600 hover:bg-red-100 rounded transition-colors disabled:opacity-50"
+                        title="Delete"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
               )
             })}
           </div>
         )}
-        
-        {/* Add Item Form Modal */}
+
+        {/* Modals */}
         <AddItemForm
           isOpen={showAddForm}
           joNumber={joNumber!}
@@ -341,14 +207,10 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
           selectedDay={selectedDay}
           applyToAllDays={applyToAllDays}
           setApplyToAllDays={setApplyToAllDays}
-          onCancel={() => {
-            setShowAddForm(false)
-            setApplyToAllDays(false)
-          }}
+          onCancel={() => { setShowAddForm(false); setApplyToAllDays(false) }}
           onOpenAddDay={openAddDayModal}
         />
 
-        {/* Edit Project Item Form Modal */}
         <EditItemForm
           isOpen={!!editingItem}
           item={editingItem}
@@ -357,21 +219,18 @@ const ProjectItems: FC<ProjectItemsProps> = ({ joNumber }) => {
           onCancel={() => setEditingItem(null)}
         />
 
-        {/* Delete Confirmation Modal */}
         <ConfirmationModal
           isOpen={deleteConfirmation.isOpen}
           type="delete"
           title="Delete Item"
-          message={`Are you sure you want to delete "${deleteConfirmation.item?.item_name}"? This will return ${deleteConfirmation.item?.allocated_quantity || 0} units back to inventory.`}
+          message={`Delete "${deleteConfirmation.item?.item_name}"? ${deleteConfirmation.item?.allocated_quantity || 0} units will return to inventory.`}
           onConfirm={handleConfirmDelete}
           onClose={() => setDeleteConfirmation({ isOpen: false, item: null, dayId: 0 })}
-          confirmText={deleteProjectItemMutation.isPending ? "Deleting..." : "Delete Item"}
+          confirmText={deleteProjectItemMutation.isPending ? "Deleting..." : "Delete"}
         />
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }
-
-
 
 export default ProjectItems

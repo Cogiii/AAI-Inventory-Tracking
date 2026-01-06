@@ -119,10 +119,13 @@ export const useUpdateProject = () => {
     onSuccess: (updatedProject, { id }) => {
       // Invalidate and refetch projects list
       queryClient.invalidateQueries({ queryKey: projectsQueryKeys.lists() });
-      
+
       // Invalidate project stats
       queryClient.invalidateQueries({ queryKey: projectsQueryKeys.stats() });
-      
+
+      // Invalidate project-detail queries (used by ProjectDetail page)
+      queryClient.invalidateQueries({ queryKey: ['project-detail'] });
+
       // Update the specific project detail in cache
       queryClient.setQueryData(
         projectsQueryKeys.detail(id),

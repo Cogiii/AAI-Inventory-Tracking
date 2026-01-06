@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useUsers, usePositions } from '@/hooks/useUsers';
 import type { User as ApiUser } from '@/services/api/users';
+import { UpdatesBanner } from '@/components/ui/UpdatesBanner';
 
 import UserFilters from './components/UserFilters';
 import UserTable from './components/UserTable';
@@ -197,6 +198,8 @@ const UserManagement: FC = () => {
 
   return (
     <div className="space-y-6 p-7">
+      {/* Real-time updates banner */}
+      <UpdatesBanner entity="user" message="New user updates available" />
       {/* Overview */}
       <div className="bg-gray space-y-6 p-7 rounded-lg">
         <div className="flex justify-between items-center">

@@ -1,6 +1,15 @@
 const express = require('express');
 const { pool } = require('../config/database');
 const { auth } = require('../middleware/auth');
+
+// Real-time event emitters
+const {
+  emitProjectDetailUpdated,
+  emitProjectDayAdded,
+  emitProjectDayUpdated,
+  emitProjectDayDeleted,
+} = require('../socket/events');
+
 const router = express.Router();
 
 /**
@@ -817,13 +826,22 @@ router.post('/project-days', auth, async (req, res) => {
     `;
     
     const [projectDayRows] = await pool.execute(fetchQuery, [result.insertId]);
-    
+
+    // Get jo_number for real-time event
+    const [projectInfo] = await pool.execute('SELECT jo_number FROM project WHERE id = ?', [project_id]);
+    const joNumber = projectInfo[0]?.jo_number;
+
+    // Emit real-time event for project day added
+    if (joNumber) {
+      emitProjectDayAdded(joNumber, projectDayRows[0], req.user);
+    }
+
     res.status(201).json({
       success: true,
       message: 'Project day created successfully',
       data: projectDayRows[0]
     });
-    
+
   } catch (error) {
     console.error('Error creating project day:', error);
     res.status(500).json({
@@ -946,13 +964,22 @@ router.put('/project-days/:id', auth, async (req, res) => {
     `;
     
     const [projectDayRows] = await pool.execute(fetchQuery, [id]);
-    
+
+    // Get jo_number for real-time event
+    const [projectInfo] = await pool.execute('SELECT jo_number FROM project WHERE id = ?', [originalData.project_id]);
+    const joNumber = projectInfo[0]?.jo_number;
+
+    // Emit real-time event for project day updated
+    if (joNumber) {
+      emitProjectDayUpdated(joNumber, projectDayRows[0], req.user);
+    }
+
     res.json({
       success: true,
       message: 'Project day updated successfully',
       data: projectDayRows[0]
     });
-    
+
   } catch (error) {
     console.error('Error updating project day:', error);
     res.status(500).json({
@@ -1045,12 +1072,21 @@ router.delete('/project-days/:id', auth, async (req, res) => {
       logDescription = `Deleted project day (${formattedDate})${projectDayData.location_name ? ` at "${projectDayData.location_name}"` : ''}`;
     }
     await pool.execute(logQuery, [projectDayData.project_id, logDescription, req.user?.id || null]);
-    
+
+    // Get jo_number for real-time event
+    const [projectInfo] = await pool.execute('SELECT jo_number FROM project WHERE id = ?', [projectDayData.project_id]);
+    const joNumber = projectInfo[0]?.jo_number;
+
+    // Emit real-time event for project day deleted
+    if (joNumber) {
+      emitProjectDayDeleted(joNumber, id, req.user);
+    }
+
     res.json({
       success: true,
       message: 'Project day deleted successfully'
     });
-    
+
   } catch (error) {
     console.error('Error deleting project day:', error);
     res.status(500).json({
@@ -1323,13 +1359,22 @@ router.post('/project-items', auth, async (req, res) => {
         ]);
       }
     }
-    
+
+    // Get jo_number for real-time event
+    const [projectInfo] = await pool.execute('SELECT jo_number FROM project WHERE id = ?', [projectId]);
+    const joNumber = projectInfo[0]?.jo_number;
+
+    // Emit real-time event for project detail updated
+    if (joNumber) {
+      emitProjectDetailUpdated(joNumber, { items: results }, req.user);
+    }
+
     res.json({
       success: true,
       message: 'Item assignments processed',
       data: results
     });
-    
+
   } catch (error) {
     console.error('Error processing item assignments:', error);
     res.status(500).json({

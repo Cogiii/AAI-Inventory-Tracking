@@ -83,7 +83,7 @@ const ReportIssueModal = ({
 
           <div className="bg-red-50 p-4 rounded-lg">
             <p className="text-sm text-red-800">
-              <strong>Warning:</strong> This action will {issueForm.issue_type === 'damage' ? 'mark items as damaged' : 'mark items as lost'} 
+              <strong>Warning:</strong> This action will {issueForm.issue_type === 'damage' ? 'mark items as damaged ' : 'mark items as lost '} 
               and reduce the available quantity. This action cannot be undone.
             </p>
           </div>

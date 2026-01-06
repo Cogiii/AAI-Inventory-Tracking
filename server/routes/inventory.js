@@ -3,6 +3,17 @@ const { auth, authorize, requirePermission } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
 const { pool } = require('../config/database');
 
+// Real-time event emitters
+const {
+  emitInventoryCreated,
+  emitInventoryUpdated,
+  emitInventoryDeleted,
+  emitStockAdded,
+  emitStockRemoved,
+  emitBrandCreated,
+  emitLocationCreated,
+} = require('../socket/events');
+
 const router = express.Router();
 
 // @route   GET /api/inventory/test-data
@@ -529,6 +540,7 @@ router.post('/', auth, requirePermission('inventory', 'add'), validate(schemas.c
       lost_quantity,
       available_quantity,
       warehouse_location_id,
+      reference_number,
       status
     } = req.body;
 
@@ -585,15 +597,15 @@ router.post('/', auth, requirePermission('inventory', 'add'), validate(schemas.c
 
       // Create delivery_log entry for audit trail
       await pool.execute(`
-        INSERT INTO delivery_log (item_id, location_id, quantity, type, notes, performed_by, created_at)
-        VALUES (?, ?, ?, 'delivery', ?, ?, NOW())
-      `, [itemId, warehouse_location_id, initialQuantity, 'Initial stock on item creation', req.user.id]);
+        INSERT INTO delivery_log (item_id, location_id, quantity, type, notes, reference_number, performed_by, created_at)
+        VALUES (?, ?, ?, 'delivery', ?, ?, ?, NOW())
+      `, [itemId, warehouse_location_id, initialQuantity, 'Initial stock on item creation', reference_number || null, req.user.id]);
 
       // Create inventory_log entry
       await pool.execute(`
-        INSERT INTO inventory_log (item_id, log_type, quantity, to_location_id, handled_by, remarks, created_at)
-        VALUES (?, 'in', ?, ?, ?, ?, NOW())
-      `, [itemId, initialQuantity, warehouse_location_id, req.user.id, 'Initial stock added on item creation']);
+        INSERT INTO inventory_log (item_id, log_type, quantity, to_location_id, handled_by, reference_no, remarks, created_at)
+        VALUES (?, 'in', ?, ?, ?, ?, ?, NOW())
+      `, [itemId, initialQuantity, warehouse_location_id, req.user.id, reference_number || null, 'Initial stock added on item creation']);
     }
 
     // Fetch the created item with related data
@@ -611,14 +623,21 @@ router.post('/', auth, requirePermission('inventory', 'add'), validate(schemas.c
     const [rows] = await pool.execute(fetchQuery, [itemId]);
 
     // Log activity for item creation
-    const activityDescription = initialQuantity > 0
-      ? `Created item "${name}" with initial quantity of ${initialQuantity}`
-      : `Created item "${name}"`;
+    let activityDescription = `Created item "${name}"`;
+    if (initialQuantity > 0) {
+      activityDescription = `Created item "${name}" with initial quantity of ${initialQuantity}`;
+      if (reference_number) {
+        activityDescription += ` (Ref: ${reference_number})`;
+      }
+    }
 
     await pool.execute(`
       INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
       VALUES (?, 'created', 'item', ?, ?, NOW())
     `, [req.user?.id, itemId, activityDescription]);
+
+    // Emit real-time event for new inventory item
+    emitInventoryCreated(itemId, rows[0], req.user);
 
     res.status(201).json({
       success: true,
@@ -781,6 +800,9 @@ router.put('/:id', auth, requirePermission('inventory', 'edit'), validate(schema
       VALUES (?, 'updated', 'item', ?, ?, NOW())
     `, [req.user?.id, id, logDescription]);
 
+    // Emit real-time event for updated inventory item
+    emitInventoryUpdated(id, newItem, req.user);
+
     res.json({
       success: true,
       message: 'Inventory item updated successfully',
@@ -843,6 +865,9 @@ router.delete('/:id', auth, requirePermission('inventory', 'delete'), async (req
       INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
       VALUES (?, 'deleted', 'item', ?, ?, NOW())
     `, [req.user?.id, id, deleteLogDescription]);
+
+    // Emit real-time event for deleted inventory item
+    emitInventoryDeleted(id, req.user);
 
     res.json({
       success: true,
@@ -982,6 +1007,9 @@ router.post('/brands', auth, async (req, res) => {
       INSERT INTO activity_log (user_id, action, entity, entity_id, description, created_at)
       VALUES (?, 'created', 'brand', ?, ?, NOW())
     `, [req.user?.id, result.insertId, `Created brand "${name.trim()}"`]);
+
+    // Emit real-time event for new brand
+    emitBrandCreated(result.insertId, newBrand[0], req.user);
 
     res.status(201).json({
       success: true,
@@ -1538,6 +1566,9 @@ router.post('/:id/delivery', auth, async (req, res) => {
       VALUES (?, 'in', ?, ?, ?, ?, ?, NOW())
     `, [id, quantity, location_id, req.user.id, reference_number || null, `Delivery received at ${locationName}`]);
 
+    // Emit real-time event for stock added
+    emitStockAdded(id, { quantity, location_id, location_name: locationName }, req.user);
+
     res.status(201).json({
       success: true,
       message: 'Delivery added successfully',
@@ -1961,11 +1992,11 @@ router.post('/:id/outstock', auth, async (req, res) => {
       WHERE item_id = ? AND location_id = ?
     `, [quantity, id, location_id]);
 
-    // Create delivery_log entry with type='out'
+    // Create delivery_log entry with type='adjustment' (negative quantity for out-stock)
     await pool.execute(`
       INSERT INTO delivery_log (item_id, location_id, quantity, type, notes, reference_number, performed_by, created_at)
-      VALUES (?, ?, ?, 'out', ?, ?, ?, NOW())
-    `, [id, location_id, quantity, notes || null, reference_number || null, req.user.id]);
+      VALUES (?, ?, ?, 'adjustment', ?, ?, ?, NOW())
+    `, [id, location_id, -quantity, notes || null, reference_number || null, req.user.id]);
 
     // Create activity log
     await pool.execute(`
@@ -1982,6 +2013,9 @@ router.post('/:id/outstock', auth, async (req, res) => {
       INSERT INTO inventory_log (item_id, log_type, quantity, from_location_id, handled_by, reference_no, remarks, created_at)
       VALUES (?, 'out', ?, ?, ?, ?, ?, NOW())
     `, [id, quantity, location_id, req.user.id, reference_number || null, `Stock out from ${locationName}${notes ? `: ${notes}` : ''}`]);
+
+    // Emit real-time event for stock removed
+    emitStockRemoved(id, { quantity, location_id, location_name: locationName }, req.user);
 
     res.status(200).json({
       success: true,

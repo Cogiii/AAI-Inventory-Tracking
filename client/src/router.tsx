@@ -18,6 +18,8 @@ import {
   ItemDetails,
   UsersPage,
   SettingsPage,
+  ActivityLogsPage,
+  InventoryLogsPage,
 } from './pages';
 
 export const router = createBrowserRouter([
@@ -138,6 +140,30 @@ export const router = createBrowserRouter([
       <ProtectedRoute>
         <Layout showSidebar={true}>
           <SettingsPage />
+        </Layout>
+      </ProtectedRoute>
+    ),
+    loader: protectedRouteLoader,
+    errorElement: <RouterErrorBoundary />,
+  },
+  {
+    path: '/activity-logs',
+    element: (
+      <ProtectedRoute>
+        <Layout showSidebar={true}>
+          <ActivityLogsPage />
+        </Layout>
+      </ProtectedRoute>
+    ),
+    loader: protectedRouteLoader,
+    errorElement: <RouterErrorBoundary />,
+  },
+  {
+    path: '/inventory-logs',
+    element: (
+      <ProtectedRoute>
+        <Layout showSidebar={true}>
+          <InventoryLogsPage />
         </Layout>
       </ProtectedRoute>
     ),

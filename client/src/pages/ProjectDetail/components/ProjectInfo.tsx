@@ -1,10 +1,10 @@
 import type { FC } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ArrowLeft, FolderOpen, Calendar, User, AlertCircle, Loader2 } from 'lucide-react'
+import { ArrowLeft, Calendar, User, AlertCircle, Loader2, Edit, XCircle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useProjectDetail } from '@/hooks/useProjectDetail'
-
-
+import { useProjectDetailModalStore } from '@/stores/useProjectDetailModalStore'
+import PermissionGuard from '@/components/auth/PermissionGuard'
+import EditProjectModal from '../modals/EditProjectModal'
 
 interface ProjectInfoProps {
   joNumber?: string
@@ -13,39 +13,34 @@ interface ProjectInfoProps {
 const ProjectInfo: FC<ProjectInfoProps> = ({ joNumber }) => {
   const navigate = useNavigate()
   const { data: projectData, isLoading, error } = useProjectDetail(joNumber)
-  
+  const { isEditProjectModalOpen, openEditProjectModal, closeEditProjectModal } = useProjectDetailModalStore()
+
   if (!joNumber) {
     return (
-      <Card className="bg-gray">
-        <CardContent className="p-6 text-center">
-          <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
-          <p className="text-gray-600">Invalid project number</p>
-        </CardContent>
-      </Card>
+      <div className="flex items-center gap-3 p-4 bg-red-50 rounded-lg">
+        <AlertCircle className="h-5 w-5 text-red-500" />
+        <p className="text-sm text-red-700">Invalid project number</p>
+      </div>
     )
   }
 
   if (isLoading) {
     return (
-      <Card className="bg-gray">
-        <CardContent className="p-6 text-center">
-          <Loader2 className="h-12 w-12 mx-auto mb-4 text-blue-500 animate-spin" />
-          <p className="text-gray-600">Loading project information...</p>
-        </CardContent>
-      </Card>
+      <div className="flex items-center gap-3 p-4">
+        <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+        <p className="text-sm text-gray-600">Loading...</p>
+      </div>
     )
   }
-  
+
   if (error || !projectData) {
     return (
-      <Card className="bg-gray">
-        <CardContent className="p-6 text-center">
-          <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
-          <p className="text-gray-600">
-            {error ? 'Error loading project information' : 'Project not found'}
-          </p>
-        </CardContent>
-      </Card>
+      <div className="flex items-center gap-3 p-4 bg-red-50 rounded-lg">
+        <AlertCircle className="h-5 w-5 text-red-500" />
+        <p className="text-sm text-red-700">
+          {error ? 'Error loading project' : 'Project not found'}
+        </p>
+      </div>
     )
   }
 
@@ -75,72 +70,72 @@ const ProjectInfo: FC<ProjectInfoProps> = ({ joNumber }) => {
   }
 
   return (
-    <div className="space-y-6 bg-gray p-7 rounded-lg">
-      {/* Header with Back Button */}
+    <div className="space-y-4">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <button
             onClick={() => navigate('/projects')}
-            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-lg transition-colors"
+            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Back to Projects"
           >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Projects
+            <ArrowLeft className="h-5 w-5" />
           </button>
-          <div className="flex items-center gap-3">
-            <FolderOpen className="h-8 w-8 text-gray-custom" />
-            <h1 className="text-2xl font-semibold text-gray-custom">{project.name}</h1>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-semibold text-gray-900">{project.name}</h1>
+              <PermissionGuard module="projects" action="edit">
+                <button
+                  onClick={openEditProjectModal}
+                  className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                  title="Edit project"
+                >
+                  <Edit className="h-4 w-4" />
+                </button>
+              </PermissionGuard>
+            </div>
+            <p className="text-sm text-gray-500 font-mono">{project.jo_number}</p>
           </div>
         </div>
-        <span className={`px-4 py-2 text-sm font-medium rounded-full ${getStatusColor(project.status)}`}>
+        <span className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(project.status)}`}>
           {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
         </span>
       </div>
 
-      {/* Project Details */}
-      <Card className="bg-white">
-        <CardHeader>
-          <CardTitle className="text-lg text-gray-800">Project Information</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-              <label className="text-sm font-medium text-gray-700">Job Order Number</label>
-              <p className="mt-1 font-mono bg-gray-100 px-3 py-2 rounded-lg text-sm">
-                {project.jo_number}
-              </p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                Created Date
-              </label>
-              <p className="mt-1 text-sm text-gray-600 px-3 py-2">
-                {formatDate(project.created_at)}
-              </p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <User className="h-4 w-4" />
-                Created By
-              </label>
-              <p className="mt-1 text-sm text-gray-600 px-3 py-2">
-                {project.created_by_name || 'Unknown'}
-              </p>
-            </div>
-          </div>
+      {/* Cancellation Notice */}
+      {project.status === 'cancelled' && project.cancellation_reason && (
+        <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <XCircle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-red-700">{project.cancellation_reason}</p>
+        </div>
+      )}
 
-          <div>
-            <label className="text-sm font-medium text-gray-700">Project Description</label>
-            <p className="mt-2 text-sm text-gray-700 bg-gray-50 p-4 rounded-lg leading-relaxed">
-              {project.description}
-            </p>
-          </div>
+      {/* Project Details - Compact inline */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-600 bg-white p-4 rounded-lg border border-gray-100">
+        <div className="flex items-center gap-2">
+          <Calendar className="h-4 w-4 text-gray-400" />
+          <span className="text-gray-500">Created:</span>
+          <span>{formatDate(project.created_at)}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <User className="h-4 w-4 text-gray-400" />
+          <span className="text-gray-500">By:</span>
+          <span>{project.created_by_name || 'Unknown'}</span>
+        </div>
+        {project.description && (
+          <p className="w-full text-gray-600 pt-2 border-t border-gray-100 mt-2">
+            {project.description}
+          </p>
+        )}
+      </div>
 
-          <div className="text-xs text-gray-500 border-t pt-3">
-            Last updated: {project.updated_at ? formatDate(project.updated_at) : 'Never'}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Edit Project Modal */}
+      <EditProjectModal
+        isOpen={isEditProjectModalOpen}
+        project={project}
+        projectDays={projectData.project_days}
+        onClose={closeEditProjectModal}
+      />
     </div>
   )
 }

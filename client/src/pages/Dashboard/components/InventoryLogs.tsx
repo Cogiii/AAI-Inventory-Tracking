@@ -1,14 +1,20 @@
+import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { 
-  ArrowDownLeft, 
-  ArrowUpRight, 
-  ArrowLeftRight, 
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  ArrowLeftRight,
   Package,
-  Clock
+  Clock,
+  ArrowRight
 } from 'lucide-react'
 import { useInventoryLogs } from '@/hooks/useDashboard'
+
 const InventoryLogs = () => {
   const { data: logs, isLoading, error } = useInventoryLogs();
+
+  // Limit to 10 items for dashboard
+  const displayLogs = logs?.slice(0, 10) || [];
   const getLogIcon = (type: string) => {
     switch (type) {
       case 'in':
@@ -48,10 +54,19 @@ const InventoryLogs = () => {
   return (
     <Card className="bg-gray">
       <CardHeader className="pb-4">
-        <CardTitle className="flex items-center gap-2 text-gray-custom">
-          <Package className="h-5 w-5" />
-          Inventory Flow/Logs
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-gray-custom">
+            <Package className="h-5 w-5" />
+            Inventory Flow/Logs
+          </CardTitle>
+          <Link
+            to="/inventory-logs"
+            className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800 px-2 py-1 rounded-lg hover:bg-blue-50 transition-all duration-200"
+          >
+            VIEW ALL
+            <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
         {isLoading ? (
@@ -73,8 +88,8 @@ const InventoryLogs = () => {
             <Package className="h-12 w-12 mx-auto mb-3 text-red-300" />
             <p>Error loading inventory logs</p>
           </div>
-        ) : logs && logs.length > 0 ? (
-          logs.map((log) => (
+        ) : displayLogs.length > 0 ? (
+          displayLogs.map((log) => (
             <Card key={log.id} className={`bg-white hover:shadow-sm transition-all duration-200`}>
               <CardContent className="p-3">
                 <div className="flex items-start justify-between">

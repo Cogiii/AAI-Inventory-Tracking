@@ -2,10 +2,14 @@ require('dotenv').config();
 require('express-async-errors');
 
 const express = require('express');
+const http = require('http');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+
+// Import Socket.io
+const { initializeSocket, getConnectedCount } = require('./socket');
 
 // Import database connection
 const { testConnection } = require('./config/database');
@@ -25,6 +29,10 @@ const projectDetailRoutes = require('./routes/project-detail');
 const calendarRoutes = require('./routes/calendar');
 
 const app = express();
+const server = http.createServer(app);
+
+// Initialize Socket.io
+initializeSocket(server);
 
 // Trust proxy for rate limiting
 app.set('trust proxy', 1);
@@ -63,7 +71,8 @@ app.get('/api/health', (req, res) => {
     status: 'OK',
     message: 'AAI Inventory Tracking Server is running',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    connectedClients: getConnectedCount()
   });
 });
 
@@ -103,8 +112,8 @@ const startServer = async () => {
   try {
     // Test database connection
     await testConnection();
-    
-    app.listen(PORT, () => {
+
+    server.listen(PORT, () => {
       console.log(`==================================================`);
       console.log(`\tInventory Tracking System Server`);
       console.log(`==================================================`);
@@ -112,6 +121,7 @@ const startServer = async () => {
       console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`Server: http://localhost:${PORT}`);
       console.log(`API Base URL: http://localhost:${PORT}/api`);
+      console.log(`Socket.io: Enabled (Real-time updates)`);
       console.log(`==================================================`);
       console.log(`READING LOGS...`);
     });

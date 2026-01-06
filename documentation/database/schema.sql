@@ -116,6 +116,7 @@ CREATE TABLE project (
     name VARCHAR(255) NOT NULL,
     description TEXT,
     status VARCHAR(50) CHECK (status IN ('upcoming', 'ongoing', 'completed', 'cancelled')) DEFAULT 'upcoming',
+    cancellation_reason TEXT DEFAULT NULL,
     created_by INT REFERENCES user(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NULL ON UPDATE NOW()

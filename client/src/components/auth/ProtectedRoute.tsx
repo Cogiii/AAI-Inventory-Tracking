@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { TokenValidator } from '../../utils/tokenValidator';
 import AuthService from '../../services/auth/AuthService';
 import { removeSecureToken, hasValidToken } from '@/utils/tokenSecurity';
+import { AuthProvider } from '@/contexts/AuthContext';
+import { RealtimeProvider } from '@/components/providers/RealtimeProvider';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -85,7 +87,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return null;
   }
 
-  return <>{children}</>;
+  return (
+    <AuthProvider>
+      <RealtimeProvider>
+        {children}
+      </RealtimeProvider>
+    </AuthProvider>
+  );
 };
 
 export default ProtectedRoute;

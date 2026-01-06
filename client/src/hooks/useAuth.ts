@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import AuthService from '../services/auth/AuthService';
 import type { User, LoginCredentials } from '../types';
 import { TokenValidator } from '../utils/tokenValidator';
+import { disconnectSocket } from '../services/socket';
 
 export const useAuth = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -50,12 +51,15 @@ export const useAuth = () => {
     setError(null);
 
     try {
+      // Disconnect socket before logout
+      disconnectSocket();
       await AuthService.logout();
       setUser(null);
       TokenValidator.clearCache();
       navigate('/login');
     } catch (err) {
       console.error('Logout error:', err);
+      disconnectSocket();
       setUser(null);
       TokenValidator.clearCache();
       navigate('/login');

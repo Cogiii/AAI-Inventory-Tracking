@@ -4,6 +4,13 @@ const { validate, schemas } = require('../middleware/validation');
 const { hashPassword } = require('../utils/password');
 const { pool } = require('../config/database');
 
+// Real-time event emitters
+const {
+  emitUserCreated,
+  emitUserUpdated,
+  emitUserDeleted,
+} = require('../socket/events');
+
 const router = express.Router();
 
 /*  
@@ -239,6 +246,114 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
+// @route   POST /api/users
+// @desc    Create new user (requires users add permission)
+// @access  Private
+router.post('/', auth, requirePermission('users', 'add'), async (req, res) => {
+  try {
+    const { first_name, last_name, email, username, password, position_id } = req.body;
+
+    // Validate required fields
+    if (!first_name || !last_name || !email || !username || !password || !position_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'All fields are required: first_name, last_name, email, username, password, position_id'
+      });
+    }
+
+    // Check if email already exists
+    const [existingEmail] = await pool.execute(
+      'SELECT id FROM user WHERE email = ?',
+      [email]
+    );
+
+    if (existingEmail.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email already exists'
+      });
+    }
+
+    // Check if username already exists
+    const [existingUsername] = await pool.execute(
+      'SELECT id FROM user WHERE username = ?',
+      [username]
+    );
+
+    if (existingUsername.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Username already exists'
+      });
+    }
+
+    // Check if position exists
+    const [positionRows] = await pool.execute(
+      'SELECT id, name FROM `position` WHERE id = ?',
+      [position_id]
+    );
+
+    if (positionRows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid position'
+      });
+    }
+
+    // Prevent non-administrators from creating administrator accounts
+    if (positionRows[0].name === 'Administrator' && req.user.positionName !== 'Administrator') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only administrators can create administrator accounts'
+      });
+    }
+
+    // Hash password
+    const hashedPassword = await hashPassword(password);
+
+    // Insert new user
+    const [result] = await pool.execute(
+      `INSERT INTO user (first_name, last_name, email, username, password_hash, position_id, is_active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, TRUE, NOW(), NOW())`,
+      [first_name, last_name, email, username, hashedPassword, position_id]
+    );
+
+    // Fetch the created user
+    const [newUserRows] = await pool.execute(
+      `SELECT u.id, u.first_name, u.last_name, u.email, u.username, u.position_id,
+              p.name as position_name, u.is_active, u.created_at, u.updated_at
+       FROM user u
+       LEFT JOIN \`position\` p ON u.position_id = p.id
+       WHERE u.id = ?`,
+      [result.insertId]
+    );
+
+    // Log the activity
+    await pool.execute(`
+      INSERT INTO activity_log (user_id, action, entity, entity_id, description)
+      VALUES (?, 'create', 'user', ?, ?)
+    `, [req.user.id, result.insertId, `Created user: ${first_name} ${last_name} (${email})`]);
+
+    // Emit real-time event for user created
+    emitUserCreated(result.insertId, newUserRows[0], req.user);
+
+    res.status(201).json({
+      success: true,
+      message: 'User created successfully',
+      data: {
+        user: newUserRows[0]
+      }
+    });
+
+  } catch (error) {
+    console.error('Create user error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error creating user'
+    });
+  }
+});
+
 // @route   PUT /api/users/:id
 // @desc    Update user (Admin only or own profile with restrictions)
 // @access  Private
@@ -354,6 +469,9 @@ router.put('/:id', auth, validate(schemas.updateUser), async (req, res) => {
       [id]
     );
 
+    // Emit real-time event for user updated
+    emitUserUpdated(id, updatedUserRows[0], req.user);
+
     res.json({
       success: true,
       message: 'User updated successfully',
@@ -417,6 +535,9 @@ router.delete('/:id', auth, requirePermission('users', 'delete'), async (req, re
       INSERT INTO activity_log (user_id, action, entity, entity_id, description)
       VALUES (?, 'delete', 'user', ?, ?)
     `, [req.user.id, id, `Deleted user: ${user.first_name} ${user.last_name} (${user.email})`]);
+
+    // Emit real-time event for user deleted
+    emitUserDeleted(id, req.user);
 
     res.json({
       success: true,

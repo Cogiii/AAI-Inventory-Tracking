@@ -1,9 +1,7 @@
 import { useState, type FC } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { FileText, Activity, AlertCircle, CheckCircle, Info, Clock, Loader2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
+import { FileText, Activity, AlertCircle, CheckCircle, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useProjectDetail } from '@/hooks/useProjectDetail'
 
-// Configurable limit - can be easily changed
 const LOGS_PER_PAGE = 10
 
 interface ProjectLogsProps {
@@ -12,30 +10,25 @@ interface ProjectLogsProps {
 
 const ProjectLogs: FC<ProjectLogsProps> = ({ joNumber }) => {
   const [currentPage, setCurrentPage] = useState(1)
-  const [pageInput, setPageInput] = useState('')
   const { data: projectData, isLoading, error } = useProjectDetail(joNumber, currentPage, LOGS_PER_PAGE)
-  
+
   if (!joNumber) return null
 
   if (isLoading) {
     return (
-      <Card className="bg-gray">
-        <CardContent className="p-6 text-center">
-          <Loader2 className="h-8 w-8 mx-auto mb-4 text-blue-500 animate-spin" />
-          <p className="text-gray-600">Loading project logs...</p>
-        </CardContent>
-      </Card>
+      <div className="flex items-center gap-3 p-4">
+        <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+        <p className="text-sm text-gray-600">Loading logs...</p>
+      </div>
     )
   }
 
   if (error || !projectData) {
     return (
-      <Card className="bg-gray">
-        <CardContent className="p-6 text-center">
-          <AlertCircle className="h-8 w-8 mx-auto mb-4 text-red-500" />
-          <p className="text-gray-600">Error loading project logs</p>
-        </CardContent>
-      </Card>
+      <div className="flex items-center gap-3 p-4 bg-red-50 rounded-lg">
+        <AlertCircle className="h-5 w-5 text-red-500" />
+        <p className="text-sm text-red-700">Error loading logs</p>
+      </div>
     )
   }
 
@@ -43,283 +36,103 @@ const ProjectLogs: FC<ProjectLogsProps> = ({ joNumber }) => {
   const logsPagination = projectData.logsPagination || { currentPage: 1, totalPages: 1, totalLogs: 0, limit: LOGS_PER_PAGE }
   const logsCounts = projectData.logsCounts || { statusChanges: 0, activities: 0, incidents: 0 }
 
-  const handlePageChange = (newPage: number) => {
-    setCurrentPage(newPage)
-    setPageInput('')
-    // Scroll to top of logs section
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    
-    // Allow empty string or only numbers
-    if (value === '' || /^\d+$/.test(value)) {
-      setPageInput(value)
-      
-      // Only navigate if it's a valid page number
-      if (value !== '') {
-        const page = parseInt(value)
-        if (page >= 1 && page <= logsPagination.totalPages) {
-          handlePageChange(page)
-        }
-      }
-    }
-  }
-
-  const handlePageInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      const page = parseInt(pageInput)
-      if (page >= 1 && page <= logsPagination.totalPages) {
-        handlePageChange(page)
-      }
-    }
-  }
-
-  const getLogIcon = (logType: string) => {
+  const getLogStyle = (logType: string) => {
     switch (logType) {
-      case 'status_change':
-        return CheckCircle
-      case 'activity':
-        return Activity
-      case 'incident':
-        return AlertCircle
-      default:
-        return Info
-    }
-  }
-
-  const getLogColor = (logType: string) => {
-    switch (logType) {
-      case 'status_change':
-        return 'text-green-600'
-      case 'activity':
-        return 'text-blue-600'
-      case 'incident':
-        return 'text-orange-600'
-      default:
-        return 'text-gray-600'
-    }
-  }
-
-  const getLogBg = (logType: string) => {
-    switch (logType) {
-      case 'status_change':
-        return 'bg-green-50'
-      case 'activity':
-        return 'bg-blue-50'
-      case 'incident':
-        return 'bg-orange-50'
-      default:
-        return 'bg-gray-50'
-    }
-  }
-
-  const getBorderColor = (logType: string) => {
-    switch (logType) {
-      case 'status_change':
-        return 'border-l-green-500'
-      case 'activity':
-        return 'border-l-blue-500'
-      case 'incident':
-        return 'border-l-orange-500'
-      default:
-        return 'border-l-gray-500'
+      case 'status_change': return { icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' }
+      case 'incident': return { icon: AlertCircle, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' }
+      default: return { icon: Activity, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' }
     }
   }
 
   const formatDateTime = (dateTimeString: string) => {
     const date = new Date(dateTimeString)
-    return {
-      date: date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric',
-        year: 'numeric'
-      }),
-      time: date.toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: true
-      })
-    }
-  }
-
-  const formatLogType = (logType: string) => {
-    return logType.split('_').map(word => 
-      word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(' ')
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
+           date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
   }
 
   return (
-    <Card className='bg-gray'>
-      <CardHeader className="pb-4">
-        <CardTitle className="flex items-center gap-2 text-gray-custom">
-          <FileText className="h-5 w-5" />
-          Project Activity Logs ({logsPagination.totalLogs})
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <div className="bg-white rounded-lg border border-gray-200">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-gray-100">
+        <div className="flex items-center gap-2">
+          <FileText className="h-5 w-5 text-gray-600" />
+          <h2 className="font-semibold text-gray-900">Activity</h2>
+          <span className="text-sm text-gray-500">({logsPagination.totalLogs})</span>
+        </div>
+        {/* Summary counts */}
+        <div className="flex items-center gap-3 text-xs">
+          <span className="flex items-center gap-1 text-green-600 cursor-help" title="Status Changes">
+            <CheckCircle className="h-3.5 w-3.5" /> {logsCounts.statusChanges}
+          </span>
+          <span className="flex items-center gap-1 text-blue-600 cursor-help" title="Activities">
+            <Activity className="h-3.5 w-3.5" /> {logsCounts.activities}
+          </span>
+          <span className="flex items-center gap-1 text-amber-600 cursor-help" title="Incidents">
+            <AlertCircle className="h-3.5 w-3.5" /> {logsCounts.incidents}
+          </span>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="p-4 max-h-[400px] overflow-y-auto">
         {projectLogs.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-            <p>No activity logs found for this project</p>
+          <div className="text-center py-8 text-gray-400">
+            <FileText className="h-10 w-10 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">No activity</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {projectLogs.map((log) => {
-              const Icon = getLogIcon(log.log_type)
-              const datetime = formatDateTime(log.created_at)
-              
+              const style = getLogStyle(log.log_type)
+              const Icon = style.icon
+
               return (
-                <Card key={log.id} className={`bg-white border-l-4 hover:shadow-sm transition-shadow ${getBorderColor(log.log_type)}`}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      <div className={`p-2 rounded-full ${getLogBg(log.log_type)}`}>
-                        <Icon className={`h-4 w-4 ${getLogColor(log.log_type)}`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className={`px-3 py-1 text-xs font-medium rounded-full ${
-                            log.log_type === 'status_change' ? 'bg-green-100 text-green-800' :
-                            log.log_type === 'activity' ? 'bg-blue-100 text-blue-800' :
-                            log.log_type === 'incident' ? 'bg-orange-100 text-orange-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {formatLogType(log.log_type)}
-                          </span>
-                          <div className="flex items-center gap-2 text-xs text-gray-500">
-                            <Clock className="h-3 w-3" />
-                            <span>{datetime.date} at {datetime.time}</span>
-                          </div>
-                        </div>
-                        
-                        <p className="text-sm text-gray-700 leading-relaxed mb-3">
-                          {log.description}
-                        </p>
-                        
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-4">
-                            <span className="text-gray-500">
-                              <span className="font-medium">Recorded by:</span> {log.recorded_by_name || 'Unknown'}
-                            </span>
-                            {log.project_date && (
-                              <span className="text-gray-500">
-                                <span className="font-medium">Project Day:</span> {new Date(log.project_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                <div
+                  key={log.id}
+                  className={`p-3 rounded-lg border ${style.bg} ${style.border}`}
+                >
+                  <div className="flex items-start gap-3">
+                    <Icon className={`h-4 w-4 ${style.color} flex-shrink-0 mt-0.5`} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-gray-800">{log.description}</p>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                        <span>{formatDateTime(log.created_at)}</span>
+                        <span>{log.recorded_by_name || 'System'}</span>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               )
             })}
           </div>
         )}
-        
-        {/* Summary */}
-        {projectLogs.length > 0 && (
-          <div className="border-t pt-4 mt-4">
-            <div className="grid grid-cols-3 gap-4 text-sm">
-              <div className="bg-white p-3 rounded-lg text-center">
-                <CheckCircle className="h-4 w-4 text-green-600 mx-auto mb-1" />
-                <p className="font-medium text-gray-700">Status Changes</p>
-                <p className="text-lg font-bold text-green-600">
-                  {logsCounts.statusChanges}
-                </p>
-              </div>
-              <div className="bg-white p-3 rounded-lg text-center">
-                <Activity className="h-4 w-4 text-blue-600 mx-auto mb-1" />
-                <p className="font-medium text-gray-700">Activities</p>
-                <p className="text-lg font-bold text-blue-600">
-                  {logsCounts.activities}
-                </p>
-              </div>
-              <div className="bg-white p-3 rounded-lg text-center">
-                <AlertCircle className="h-4 w-4 text-orange-600 mx-auto mb-1" />
-                <p className="font-medium text-gray-700">Incidents</p>
-                <p className="text-lg font-bold text-orange-600">
-                  {logsCounts.incidents}
-                </p>
-              </div>
-            </div>
+      </div>
+
+      {/* Pagination */}
+      {logsPagination.totalPages > 1 && (
+        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 text-sm">
+          <span className="text-gray-500">
+            Page {logsPagination.currentPage} of {logsPagination.totalPages}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setCurrentPage(p => p - 1)}
+              disabled={logsPagination.currentPage === 1}
+              className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setCurrentPage(p => p + 1)}
+              disabled={logsPagination.currentPage === logsPagination.totalPages}
+              className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
-        )}
-
-        {/* Pagination */}
-        {logsPagination.totalPages > 1 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-gray-200">
-            <div className="text-sm text-gray-600">
-              Showing {((logsPagination.currentPage - 1) * logsPagination.limit) + 1} to{' '}
-              {Math.min(logsPagination.currentPage * logsPagination.limit, logsPagination.totalLogs)} of{' '}
-              {logsPagination.totalLogs} logs
-            </div>
-
-            <div className="flex items-center gap-2">
-              {/* First Page */}
-              <button
-                onClick={() => handlePageChange(1)}
-                disabled={logsPagination.currentPage === 1}
-                className="p-2 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                title="First page"
-              >
-                <ChevronsLeft className="h-4 w-4" />
-              </button>
-
-              {/* Previous Page */}
-              <button
-                onClick={() => handlePageChange(logsPagination.currentPage - 1)}
-                disabled={logsPagination.currentPage === 1}
-                className="p-2 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                title="Previous page"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-
-              {/* Page Input */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">Page</span>
-                <input
-                  type="text"
-                  value={pageInput || logsPagination.currentPage}
-                  onChange={handlePageInputChange}
-                  onKeyDown={handlePageInputKeyDown}
-                  onBlur={() => setPageInput('')}
-                  onFocus={(e) => {
-                    setPageInput(logsPagination.currentPage.toString())
-                    e.target.select()
-                  }}
-                  placeholder={logsPagination.currentPage.toString()}
-                  className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <span className="text-sm text-gray-600">of {logsPagination.totalPages}</span>
-              </div>
-
-              {/* Next Page */}
-              <button
-                onClick={() => handlePageChange(logsPagination.currentPage + 1)}
-                disabled={logsPagination.currentPage === logsPagination.totalPages}
-                className="p-2 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                title="Next page"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-
-              {/* Last Page */}
-              <button
-                onClick={() => handlePageChange(logsPagination.totalPages)}
-                disabled={logsPagination.currentPage === logsPagination.totalPages}
-                className="p-2 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                title="Last page"
-              >
-                <ChevronsRight className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </div>
   )
 }
 
