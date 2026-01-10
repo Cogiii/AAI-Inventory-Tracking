@@ -1,4 +1,4 @@
-USE AAI_inventory_db;
+USE aai_inventory;
 
 -- ====================
 -- ITEMS QUANTITY MANAGEMENT

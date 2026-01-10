@@ -3,7 +3,7 @@
 -- Run this script on existing database to add status automation
 -- =====================================================
 
-USE AAI_inventory_db;
+USE aai_inventory;
 
 -- Step 1: Modify the ENUM to add 'low stock' status
 ALTER TABLE item

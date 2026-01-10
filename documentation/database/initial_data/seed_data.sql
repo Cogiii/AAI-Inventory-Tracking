@@ -4,7 +4,7 @@
 -- PURPOSE: Insert essential initial data (positions, default admin user, roles)
 -- ================================================
 
-USE AAI_inventory_db;
+USE aai_inventory;
 
 -- ====================
 -- 1. POSITIONS WITH PERMISSIONS (JSON format)
