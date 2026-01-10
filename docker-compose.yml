@@ -1,0 +1,75 @@
+# Docker Compose for Local Development
+version: '3.8'
+
+services:
+  # MySQL Database
+  db:
+    image: mysql:8.0
+    container_name: aai-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME:-aai_inventory}
+      MYSQL_USER: ${DB_USER:-aai_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-aai_password}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./documentation/database/initial_data:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+    networks:
+      - aai-network
+
+  # Backend Server
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: aai-server
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 5000
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-aai_inventory}
+      DB_USER: ${DB_USER:-aai_user}
+      DB_PASSWORD: ${DB_PASSWORD:-aai_password}
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key}
+      JWT_EXPIRE: ${JWT_EXPIRE:-7d}
+      CLIENT_URL: http://localhost:3000
+      BCRYPT_ROUNDS: 12
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - aai-network
+
+  # Frontend Client
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:5000/api
+    container_name: aai-client
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - server
+    networks:
+      - aai-network
+
+volumes:
+  mysql_data:
+
+networks:
+  aai-network:
+    driver: bridge
