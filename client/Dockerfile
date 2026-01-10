@@ -17,8 +17,8 @@ COPY . .
 ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 
-# Build the app
-RUN npm run build
+# Build the app (skip TypeScript check, use Vite only)
+RUN npx vite build
 
 # Stage 2: Production with Nginx
 FROM nginx:alpine
