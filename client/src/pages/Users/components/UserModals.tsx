@@ -51,7 +51,8 @@ const UserModals: FC<UserModalsProps> = ({
     email: '',
     username: '',
     position_id: '',
-    password: ''
+    password: '',
+    confirm_password: ''
   });
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
@@ -89,7 +90,8 @@ const UserModals: FC<UserModalsProps> = ({
         email: '',
         username: '',
         position_id: '',
-        password: ''
+        password: '',
+        confirm_password: ''
       });
       setAddError(null);
     }
@@ -154,12 +156,16 @@ const UserModals: FC<UserModalsProps> = ({
     }
   };
 
+  const passwordsMatch = addFormData.password === addFormData.confirm_password;
+
   const isAddFormValid = addFormData.first_name.trim() &&
     addFormData.last_name.trim() &&
     addFormData.email.trim() &&
     addFormData.username.trim() &&
     addFormData.position_id &&
-    addFormData.password.trim();
+    addFormData.password.trim() &&
+    addFormData.confirm_password.trim() &&
+    passwordsMatch;
 
   const isEditFormValid = editFormData.first_name.trim() &&
     editFormData.last_name.trim() &&
@@ -280,6 +286,27 @@ const UserModals: FC<UserModalsProps> = ({
                 placeholder="Enter password"
                 disabled={addLoading}
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Confirm Password *
+              </label>
+              <input
+                type="password"
+                value={addFormData.confirm_password}
+                onChange={(e) => setAddFormData(prev => ({ ...prev, confirm_password: e.target.value }))}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  addFormData.confirm_password && !passwordsMatch
+                    ? 'border-red-500'
+                    : 'border-gray-300'
+                }`}
+                placeholder="Confirm password"
+                disabled={addLoading}
+              />
+              {addFormData.confirm_password && !passwordsMatch && (
+                <p className="text-red-500 text-sm mt-1">Passwords do not match</p>
+              )}
             </div>
           </form>
         </ModalBody>
