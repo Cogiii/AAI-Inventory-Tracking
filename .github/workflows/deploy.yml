@@ -90,15 +90,27 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Prepare directories on Lightsail
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ${{ secrets.LIGHTSAIL_USER }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          script: |
+            mkdir -p ~/aai-inventory/nginx
+            mkdir -p ~/aai-inventory/documentation/database/init
+            rm -f ~/aai-inventory/documentation/database/init/*.sql
+
       - name: Copy files to Lightsail
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.LIGHTSAIL_HOST }}
           username: ${{ secrets.LIGHTSAIL_USER }}
           key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
-          source: "docker-compose.prod.yml,nginx/*"
+          source: "docker-compose.prod.yml,nginx/*,documentation/database/init/*"
           target: "~/aai-inventory"
           strip_components: 0
+          overwrite: true
 
       - name: Deploy to Lightsail
         uses: appleboy/ssh-action@v1.0.3
