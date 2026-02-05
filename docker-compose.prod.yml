@@ -1,6 +1,4 @@
-# Docker Compose for Production (EC2)
-version: '3.8'
-
+# Docker Compose for Production (Lightsail)
 services:
   # MySQL Database
   db:
@@ -24,7 +22,7 @@ services:
 
   # Backend Server
   server:
-    image: ${DOCKER_REGISTRY:-ghcr.io}/${GITHUB_REPOSITORY:-your-username/aai-inventory}/server:${IMAGE_TAG:-latest}
+    image: ghcr.io/cogiii/aai-inventory-tracking/server:${IMAGE_TAG:-latest}
     container_name: aai-server
     restart: always
     environment:
@@ -47,7 +45,7 @@ services:
 
   # Frontend Client
   client:
-    image: ${DOCKER_REGISTRY:-ghcr.io}/${GITHUB_REPOSITORY:-your-username/aai-inventory}/client:${IMAGE_TAG:-latest}
+    image: ghcr.io/cogiii/aai-inventory-tracking/client:${IMAGE_TAG:-latest}
     container_name: aai-client
     restart: always
     depends_on:
