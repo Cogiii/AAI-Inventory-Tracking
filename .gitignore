@@ -1,1 +1,6 @@
 .claude
+
+/documentation/*.md
+/documentation/*.drawio
+/documentation/diagrams
+/documentation/database/backup.sql

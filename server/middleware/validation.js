@@ -58,9 +58,16 @@ const schemas = {
   }),
 
   updateUser: Joi.object({
-    name: Joi.string().min(2).max(50),
+    first_name: Joi.string().min(2).max(50),
+    last_name: Joi.string().min(2).max(50),
     email: Joi.string().email(),
-    role: Joi.string().valid('admin', 'manager', 'user')
+    username: Joi.string().min(3).max(50).pattern(/^[a-zA-Z0-9_]+$/).messages({
+      'string.min': 'Username must be at least 3 characters long',
+      'string.max': 'Username cannot exceed 50 characters',
+      'string.pattern.base': 'Username can only contain letters, numbers, and underscores'
+    }),
+    position_id: Joi.number().integer().positive(),
+    is_active: Joi.boolean()
   }),
 
   // Inventory validation schemas (based on database schema)

@@ -360,7 +360,7 @@ router.post('/', auth, requirePermission('users', 'add'), async (req, res) => {
 router.put('/:id', auth, validate(schemas.updateUser), async (req, res) => {
   try {
     const { id } = req.params;
-    const { first_name, last_name, email, position_id, is_active } = req.body;
+    const { first_name, last_name, email, username, position_id, is_active } = req.body;
 
     // Check if user exists
     const [userRows] = await pool.execute(
@@ -419,6 +419,20 @@ router.put('/:id', auth, validate(schemas.updateUser), async (req, res) => {
       }
     }
 
+    // Check if username is being changed and if it already exists
+    if (username && username !== existingUser.username) {
+      const [existingUsernameRows] = await pool.execute(
+        'SELECT id FROM user WHERE username = ? AND id != ?',
+        [username, id]
+      );
+      if (existingUsernameRows.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Username already in use'
+        });
+      }
+    }
+
     // Build update query dynamically
     const updateFields = [];
     const updateValues = [];
@@ -434,6 +448,10 @@ router.put('/:id', auth, validate(schemas.updateUser), async (req, res) => {
     if (email !== undefined) {
       updateFields.push('email = ?');
       updateValues.push(email);
+    }
+    if (username !== undefined) {
+      updateFields.push('username = ?');
+      updateValues.push(username);
     }
     if (position_id !== undefined && isAdmin) {
       updateFields.push('position_id = ?');
