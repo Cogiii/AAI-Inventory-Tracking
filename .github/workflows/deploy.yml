@@ -18,9 +18,6 @@ jobs:
       contents: read
       packages: write
 
-    outputs:
-      image_tag: ${{ steps.meta.outputs.tags }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -52,8 +49,8 @@ jobs:
           push: true
           tags: ${{ steps.meta-server.outputs.tags }}
           labels: ${{ steps.meta-server.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=server
+          cache-to: type=gha,scope=server,mode=min
 
       - name: Extract metadata for Client
         id: meta-client
@@ -74,12 +71,8 @@ jobs:
           labels: ${{ steps.meta-client.outputs.labels }}
           build-args: |
             VITE_API_URL=${{ secrets.VITE_API_URL }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Get short SHA
-        id: meta
-        run: echo "tags=${{ github.sha }}" >> $GITHUB_OUTPUT
+          cache-from: type=gha,scope=client
+          cache-to: type=gha,scope=client,mode=min
 
   deploy:
     name: Deploy to Lightsail
@@ -137,16 +130,21 @@ jobs:
             echo "JWT_EXPIRE=${{ secrets.JWT_EXPIRE }}" >> .env
             echo "CLIENT_URL=${{ secrets.CLIENT_URL }}" >> .env
 
-            # Pull latest images
-            docker compose -f docker-compose.prod.yml pull
-
-            # Stop and remove old containers
+            # Stop old containers and remove local images
             docker compose -f docker-compose.prod.yml down
 
-            # Start new containers
-            docker compose -f docker-compose.prod.yml up -d
+            # Force remove old images to ensure fresh pull
+            docker rmi ghcr.io/${{ github.repository }}/server:latest || true
+            docker rmi ghcr.io/${{ github.repository }}/client:latest || true
 
-            # Clean up old images
+            # Pull fresh images
+            docker pull ghcr.io/${{ github.repository }}/server:latest
+            docker pull ghcr.io/${{ github.repository }}/client:latest
+
+            # Start new containers
+            docker compose -f docker-compose.prod.yml up -d --force-recreate
+
+            # Clean up dangling images
             docker image prune -af
 
             # Show running containers
